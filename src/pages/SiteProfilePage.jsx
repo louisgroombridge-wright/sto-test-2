@@ -26,7 +26,6 @@ import {
   Typography,
   Paper,
   Checkbox,
-  IconButton,
 } from "@mui/material";
 import { Fragment, useMemo, useState } from "react";
 import {
@@ -38,9 +37,6 @@ import {
   LockOpen,
   Restore,
   Archive,
-  EditNote,
-  Save,
-  Close,
 } from "@mui/icons-material";
 
 const baselineProfile = {
@@ -158,8 +154,6 @@ const SiteProfilePage = () => {
   const [profileDescription, setProfileDescription] = useState(
     baselineProfile.description
   );
-  const [notesEditorId, setNotesEditorId] = useState("");
-  const [notesDraft, setNotesDraft] = useState("");
 
   // Criteria shown here are the explicit eligibility gates for downstream steps.
   const activeCriteria = useMemo(
@@ -392,22 +386,6 @@ const SiteProfilePage = () => {
     }
   };
 
-  const handleOpenNotesEditor = (criterion) => {
-    setNotesEditorId(criterion.id);
-    setNotesDraft(criterion.notes || "");
-  };
-
-  const handleSaveNotes = (criterionId) => {
-    handleUpdateCriterionField(criterionId, "notes", notesDraft.trim());
-    setNotesEditorId("");
-    setNotesDraft("");
-  };
-
-  const handleCancelNotes = () => {
-    setNotesEditorId("");
-    setNotesDraft("");
-  };
-
   const groupedCriteria = useMemo(
     () =>
       categories.map((category) => ({
@@ -599,55 +577,13 @@ const SiteProfilePage = () => {
                             </FormControl>
                           </TableCell>
                           <TableCell>
-                            <Stack spacing={1}>
-                              <Stack
-                                direction="row"
-                                spacing={1}
-                                alignItems="center"
-                              >
-                                <Tooltip
-                                  title={`Updated by ${criterion.updatedBy} on ${criterion.updatedAt}`}
-                                >
-                                  <Typography variant="body2">
-                                    {criterion.notes || "Add rationale"}
-                                  </Typography>
-                                </Tooltip>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleOpenNotesEditor(criterion)}
-                                  disabled={isLocked}
-                                >
-                                  <EditNote fontSize="small" />
-                                </IconButton>
-                              </Stack>
-                              {notesEditorId === criterion.id && (
-                                <Stack
-                                  direction="row"
-                                  spacing={1}
-                                  alignItems="center"
-                                >
-                                  <TextField
-                                    size="small"
-                                    value={notesDraft}
-                                    onChange={(event) =>
-                                      setNotesDraft(event.target.value)
-                                    }
-                                    placeholder="Add notes to justify the gate"
-                                    fullWidth
-                                  />
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => handleSaveNotes(criterion.id)}
-                                  >
-                                    <Save fontSize="small" />
-                                  </IconButton>
-                                  <IconButton size="small" onClick={handleCancelNotes}>
-                                    <Close fontSize="small" />
-                                  </IconButton>
-                                </Stack>
-                              )}
-                            </Stack>
+                            <Tooltip
+                              title={`Updated by ${criterion.updatedBy} on ${criterion.updatedAt}`}
+                            >
+                              <Typography variant="body2">
+                                {criterion.notes || "Add rationale in the edit dialog."}
+                              </Typography>
+                            </Tooltip>
                           </TableCell>
                           <TableCell>
                             {Math.round(
