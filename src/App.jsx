@@ -11,6 +11,7 @@ import { Description, Visibility } from "@mui/icons-material";
 import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
+import PatientProfilePage from "./pages/PatientProfilePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 const defaultPath = "/patient-profile";
@@ -243,11 +244,7 @@ const App = () => {
           <Route
             path="/patient-profile"
             element={
-              <PlaceholderPage
-                title="Patient Profile"
-                description="Define target patient cohorts, inclusion criteria, and baseline assumptions."
-                {...pageProps}
-              />
+              <PatientProfilePage />
             }
           />
           <Route
