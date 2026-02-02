@@ -26,8 +26,9 @@ import {
   Typography,
   Paper,
   Checkbox,
+  IconButton,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import {
   Add,
   ContentCopy,
@@ -37,6 +38,9 @@ import {
   LockOpen,
   Restore,
   Archive,
+  EditNote,
+  Save,
+  Close,
 } from "@mui/icons-material";
 
 const baselineProfile = {
@@ -46,6 +50,8 @@ const baselineProfile = {
     "Rules of engagement for sites eligible in this scenario.",
   status: "Draft",
   lastModified: "2024-04-14 09:30",
+  modifiedBy: "J. Rivera",
+  downstreamStatus: "Up to date",
   criteria: [
     {
       id: "sc-001",
@@ -55,8 +61,8 @@ const baselineProfile = {
       source: "Data-derived",
       notes: "Required for imaging schedule within 7 days.",
       impact: "Moderate",
-      addedBy: "J. Rivera",
-      addedAt: "2024-04-10 08:30",
+      createdBy: "J. Rivera",
+      createdAt: "2024-04-10 08:30",
       updatedBy: "J. Rivera",
       updatedAt: "2024-04-12 16:05",
       archived: false,
@@ -69,8 +75,8 @@ const baselineProfile = {
       source: "Qualification required",
       notes: "Ensures experienced coordination team.",
       impact: "High",
-      addedBy: "S. Nguyen",
-      addedAt: "2024-04-11 11:40",
+      createdBy: "S. Nguyen",
+      createdAt: "2024-04-11 11:40",
       updatedBy: "S. Nguyen",
       updatedAt: "2024-04-11 11:40",
       archived: false,
@@ -83,8 +89,8 @@ const baselineProfile = {
       source: "Expert judgement",
       notes: "Improves throughput but not mandatory.",
       impact: "Low",
-      addedBy: "M. Patel",
-      addedAt: "2024-04-12 09:05",
+      createdBy: "M. Patel",
+      createdAt: "2024-04-12 09:05",
       updatedBy: "M. Patel",
       updatedAt: "2024-04-12 09:05",
       archived: false,
@@ -97,8 +103,8 @@ const baselineProfile = {
       source: "Data-derived",
       notes: "Supports compliance for digital outcomes.",
       impact: "Low",
-      addedBy: "L. Gomez",
-      addedAt: "2024-04-12 13:10",
+      createdBy: "L. Gomez",
+      createdAt: "2024-04-12 13:10",
       updatedBy: "L. Gomez",
       updatedAt: "2024-04-12 13:10",
       archived: false,
@@ -114,8 +120,8 @@ const emptyCriterion = {
   source: "Data-derived",
   notes: "",
   impact: "Low",
-  addedBy: "",
-  addedAt: "",
+  createdBy: "",
+  createdAt: "",
   updatedBy: "",
   updatedAt: "",
   archived: false,
@@ -133,6 +139,11 @@ const impactOrder = {
   High: 18,
 };
 
+const requirementMultiplier = {
+  Required: 1,
+  Preferred: 0.5,
+};
+
 const formatTimestamp = () => {
   const now = new Date();
   return now.toISOString().slice(0, 16).replace("T", " ");
@@ -144,6 +155,11 @@ const SiteProfilePage = () => {
   const [dialogMode, setDialogMode] = useState("add");
   const [draftCriterion, setDraftCriterion] = useState(emptyCriterion);
   const [profileName, setProfileName] = useState(baselineProfile.name);
+  const [profileDescription, setProfileDescription] = useState(
+    baselineProfile.description
+  );
+  const [notesEditorId, setNotesEditorId] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
 
   // Criteria shown here are the explicit eligibility gates for downstream steps.
   const activeCriteria = useMemo(
@@ -170,7 +186,10 @@ const SiteProfilePage = () => {
     Math.round(
       estimatedBaseline -
         activeCriteria.reduce(
-          (accumulator, criterion) => accumulator + impactOrder[criterion.impact],
+          (accumulator, criterion) =>
+            accumulator +
+            impactOrder[criterion.impact] *
+              requirementMultiplier[criterion.requirement],
           0
         )
     )
@@ -179,6 +198,7 @@ const SiteProfilePage = () => {
   const isLocked = profile.status === "Locked";
   const isMissingRequired = requiredCount === 0;
   const isOverlyRestrictive = estimatedRemaining < 60 || requiredCount > 4;
+  const isDownstreamOutOfDate = profile.downstreamStatus === "Out of date";
 
   // Editing is blocked when a profile is locked; users must duplicate first.
   const handleOpenDialog = (mode, criterion = emptyCriterion) => {
@@ -201,8 +221,8 @@ const SiteProfilePage = () => {
       const newCriterion = {
         ...draftCriterion,
         id: `sc-${Math.random().toString(36).slice(2, 8)}`,
-        addedBy: "Current User",
-        addedAt: now,
+        createdBy: "Current User",
+        createdAt: now,
         updatedBy: "Current User",
         updatedAt: now,
         archived: false,
@@ -211,6 +231,8 @@ const SiteProfilePage = () => {
         ...prev,
         criteria: [...prev.criteria, newCriterion],
         lastModified: now,
+        modifiedBy: "Current User",
+        downstreamStatus: "Out of date",
       }));
     } else {
       setProfile((prev) => ({
@@ -225,6 +247,8 @@ const SiteProfilePage = () => {
             : criterion
         ),
         lastModified: now,
+        modifiedBy: "Current User",
+        downstreamStatus: "Out of date",
       }));
     }
     handleCloseDialog();
@@ -249,6 +273,31 @@ const SiteProfilePage = () => {
           : criterion
       ),
       lastModified: now,
+      modifiedBy: "Current User",
+      downstreamStatus: "Out of date",
+    }));
+  };
+
+  const handleUpdateCriterionField = (criterionId, field, value) => {
+    if (isLocked) {
+      return;
+    }
+    const now = formatTimestamp();
+    setProfile((prev) => ({
+      ...prev,
+      criteria: prev.criteria.map((criterion) =>
+        criterion.id === criterionId
+          ? {
+              ...criterion,
+              [field]: value,
+              updatedBy: "Current User",
+              updatedAt: now,
+            }
+          : criterion
+      ),
+      lastModified: now,
+      modifiedBy: "Current User",
+      downstreamStatus: "Out of date",
     }));
   };
 
@@ -271,6 +320,8 @@ const SiteProfilePage = () => {
           : criterion
       ),
       lastModified: now,
+      modifiedBy: "Current User",
+      downstreamStatus: "Out of date",
     }));
   };
 
@@ -282,13 +333,17 @@ const SiteProfilePage = () => {
       status: "Draft",
       name: `${prev.name} (Copy)`,
       lastModified: now,
+      modifiedBy: "Current User",
+      downstreamStatus: "Out of date",
     }));
     setProfileName((prev) => `${prev} (Copy)`);
+    setProfileDescription((prev) => `${prev} (Copy)`);
   };
 
   const handleResetBaseline = () => {
     setProfile(baselineProfile);
     setProfileName(baselineProfile.name);
+    setProfileDescription(baselineProfile.description);
   };
 
   const handleToggleLock = () => {
@@ -316,9 +371,53 @@ const SiteProfilePage = () => {
         ...prev,
         name: profileName,
         lastModified: now,
+        modifiedBy: "Current User",
       }));
     }
   };
+
+  const handleUpdateDescription = (event) => {
+    setProfileDescription(event.target.value);
+  };
+
+  const handleBlurDescription = () => {
+    if (profileDescription !== profile.description) {
+      const now = formatTimestamp();
+      setProfile((prev) => ({
+        ...prev,
+        description: profileDescription,
+        lastModified: now,
+        modifiedBy: "Current User",
+      }));
+    }
+  };
+
+  const handleOpenNotesEditor = (criterion) => {
+    setNotesEditorId(criterion.id);
+    setNotesDraft(criterion.notes || "");
+  };
+
+  const handleSaveNotes = (criterionId) => {
+    handleUpdateCriterionField(criterionId, "notes", notesDraft.trim());
+    setNotesEditorId("");
+    setNotesDraft("");
+  };
+
+  const handleCancelNotes = () => {
+    setNotesEditorId("");
+    setNotesDraft("");
+  };
+
+  const groupedCriteria = useMemo(
+    () =>
+      categories.map((category) => ({
+        category,
+        items: activeCriteria.filter(
+          (criterion) => criterion.category === category
+        ),
+      })),
+    [activeCriteria]
+  );
 
   return (
     <Box sx={{ p: 4 }}>
@@ -370,7 +469,7 @@ const SiteProfilePage = () => {
                   onClick={handleToggleLock}
                   disabled={isLocked}
                 >
-                  {isLocked ? "Locked" : "Lock"}
+                  {isLocked ? "Locked" : "Lock Profile"}
                 </Button>
               </span>
             </Tooltip>
@@ -385,6 +484,15 @@ const SiteProfilePage = () => {
               disabled={isLocked}
               sx={{ minWidth: 240 }}
             />
+            <TextField
+              label="Description (optional)"
+              size="small"
+              value={profileDescription}
+              onChange={handleUpdateDescription}
+              onBlur={handleBlurDescription}
+              disabled={isLocked}
+              sx={{ minWidth: 280 }}
+            />
             <Chip
               label={profile.status}
               color={profile.status === "Locked" ? "default" : "primary"}
@@ -392,6 +500,17 @@ const SiteProfilePage = () => {
             />
           </Stack>
         </Box>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            Last modified: {profile.lastModified} · {profile.modifiedBy}
+          </Typography>
+          <Typography
+            variant="body2"
+            color={isDownstreamOutOfDate ? "warning.main" : "text.secondary"}
+          >
+            Downstream status: {profile.downstreamStatus}
+          </Typography>
+        </Stack>
 
         <Paper sx={{ p: 2 }}>
           <Stack spacing={1}>
@@ -410,93 +529,184 @@ const SiteProfilePage = () => {
                     <TableCell>Requirement</TableCell>
                     <TableCell>Source</TableCell>
                     <TableCell>Notes</TableCell>
-                    <TableCell>Impact</TableCell>
+                    <TableCell>Impact (approx. sites excluded)</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {activeCriteria.map((criterion) => (
-                    <TableRow key={criterion.id}>
-                      <TableCell>{criterion.category}</TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5}>
-                          <Typography variant="body2">
-                            {criterion.label}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Added by {criterion.addedBy} on {criterion.addedAt}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Checkbox
-                            checked={criterion.requirement === "Required"}
-                            onChange={() =>
-                              handleToggleRequirement(criterion.id)
-                            }
-                            disabled={isLocked}
-                          />
-                          <Typography variant="body2">
-                            {criterion.requirement}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={criterion.source} size="small" />
-                      </TableCell>
-                      <TableCell>
-                        <Tooltip
-                          title={`Updated by ${criterion.updatedBy} on ${criterion.updatedAt}`}
+                  {/* Constraint: grouping is visual only; no ordering or ranking implied. */}
+                  {groupedCriteria.map((group) => (
+                    <Fragment key={group.category}>
+                      {group.items.length > 0 && (
+                        <TableRow
+                          key={`${group.category}-header`}
+                          sx={{ backgroundColor: "action.hover" }}
                         >
-                          <Typography variant="body2">
-                            {criterion.notes || "Add rationale"}
-                          </Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell>{criterion.impact}</TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          <Tooltip
-                            title={
-                              isLocked
-                                ? "Duplicate the profile to edit criteria."
-                                : "Edit criterion"
-                            }
-                          >
-                            <span>
-                              <Button
-                                size="small"
-                                startIcon={<Edit />}
-                                onClick={() => handleOpenDialog("edit", criterion)}
+                          <TableCell colSpan={7}>
+                            <Typography variant="subtitle2">
+                              {group.category}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {group.items.map((criterion) => (
+                        <TableRow key={criterion.id}>
+                          <TableCell>{criterion.category}</TableCell>
+                          <TableCell>
+                            <Stack spacing={0.5}>
+                              <Typography variant="body2">
+                                {criterion.label}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                Created by {criterion.createdBy} on{" "}
+                                {criterion.createdAt}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Checkbox
+                                checked={criterion.requirement === "Required"}
+                                onChange={() =>
+                                  handleToggleRequirement(criterion.id)
+                                }
+                                disabled={isLocked}
+                              />
+                              <Typography variant="body2">
+                                {criterion.requirement}
+                              </Typography>
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            <FormControl size="small" fullWidth>
+                              <Select
+                                value={criterion.source}
+                                onChange={(event) =>
+                                  handleUpdateCriterionField(
+                                    criterion.id,
+                                    "source",
+                                    event.target.value
+                                  )
+                                }
                                 disabled={isLocked}
                               >
-                                Edit
-                              </Button>
-                            </span>
-                          </Tooltip>
-                          <Tooltip
-                            title={
-                              isLocked
-                                ? "Duplicate the profile to archive."
-                                : "Archive instead of deleting."
-                            }
-                          >
-                            <span>
-                              <Button
-                                size="small"
-                                color="warning"
-                                startIcon={<Archive />}
-                                onClick={() => handleArchiveCriterion(criterion.id)}
-                                disabled={isLocked}
+                                {sources.map((source) => (
+                                  <MenuItem key={source} value={source}>
+                                    {source}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </TableCell>
+                          <TableCell>
+                            <Stack spacing={1}>
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                alignItems="center"
                               >
-                                Archive
-                              </Button>
-                            </span>
-                          </Tooltip>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
+                                <Tooltip
+                                  title={`Updated by ${criterion.updatedBy} on ${criterion.updatedAt}`}
+                                >
+                                  <Typography variant="body2">
+                                    {criterion.notes || "Add rationale"}
+                                  </Typography>
+                                </Tooltip>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleOpenNotesEditor(criterion)}
+                                  disabled={isLocked}
+                                >
+                                  <EditNote fontSize="small" />
+                                </IconButton>
+                              </Stack>
+                              {notesEditorId === criterion.id && (
+                                <Stack
+                                  direction="row"
+                                  spacing={1}
+                                  alignItems="center"
+                                >
+                                  <TextField
+                                    size="small"
+                                    value={notesDraft}
+                                    onChange={(event) =>
+                                      setNotesDraft(event.target.value)
+                                    }
+                                    placeholder="Add notes to justify the gate"
+                                    fullWidth
+                                  />
+                                  <IconButton
+                                    size="small"
+                                    color="primary"
+                                    onClick={() => handleSaveNotes(criterion.id)}
+                                  >
+                                    <Save fontSize="small" />
+                                  </IconButton>
+                                  <IconButton size="small" onClick={handleCancelNotes}>
+                                    <Close fontSize="small" />
+                                  </IconButton>
+                                </Stack>
+                              )}
+                            </Stack>
+                          </TableCell>
+                          <TableCell>
+                            {Math.round(
+                              impactOrder[criterion.impact] *
+                                requirementMultiplier[criterion.requirement]
+                            )}
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              justifyContent="flex-end"
+                            >
+                              <Tooltip
+                                title={
+                                  isLocked
+                                    ? "Duplicate the profile to edit criteria."
+                                    : "Edit criterion"
+                                }
+                              >
+                                <span>
+                                  <Button
+                                    size="small"
+                                    startIcon={<Edit />}
+                                    onClick={() =>
+                                      handleOpenDialog("edit", criterion)
+                                    }
+                                    disabled={isLocked}
+                                  >
+                                    Edit
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Tooltip
+                                title={
+                                  isLocked
+                                    ? "Duplicate the profile to archive."
+                                    : "Archive instead of deleting."
+                                }
+                              >
+                                <span>
+                                  <Button
+                                    size="small"
+                                    color="warning"
+                                    startIcon={<Archive />}
+                                    onClick={() =>
+                                      handleArchiveCriterion(criterion.id)
+                                    }
+                                    disabled={isLocked}
+                                  >
+                                    Archive
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -507,16 +717,17 @@ const SiteProfilePage = () => {
         <Paper sx={{ p: 2 }}>
           <Stack spacing={2}>
             <Typography variant="h6">Impact summary</Typography>
+            {/* Constraint: impact is approximate only; no site lists or rankings. */}
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Estimated candidate sites (baseline)
+                  Approximate candidate sites (baseline)
                 </Typography>
                 <Typography variant="h4">{estimatedBaseline}</Typography>
               </Box>
               <Box sx={{ flex: 1 }}>
                 <Typography variant="subtitle2" color="text.secondary">
-                  Estimated remaining after criteria
+                  Approximate remaining after criteria
                 </Typography>
                 <Typography variant="h4">{estimatedRemaining}</Typography>
               </Box>
@@ -534,9 +745,14 @@ const SiteProfilePage = () => {
                 At least one Required criterion must be defined before proceeding.
               </Typography>
             )}
+            {isOverlyRestrictive && (
+              <Typography color="warning.main" variant="body2">
+                Warning: Remaining sites are below the minimum threshold or too
+                many Required criteria exist.
+              </Typography>
+            )}
             <Accordion defaultExpanded>
-              <AccordionSummary expandIcon={<ExpandMore />}
-              >
+              <AccordionSummary expandIcon={<ExpandMore />}>
                 <Typography>Impact signals & downstream effects</Typography>
               </AccordionSummary>
               <AccordionDetails>
@@ -552,7 +768,7 @@ const SiteProfilePage = () => {
                     saving updates.
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Last modified: {profile.lastModified}
+                    Last modified: {profile.lastModified} · {profile.modifiedBy}
                   </Typography>
                 </Stack>
               </AccordionDetails>
@@ -658,7 +874,7 @@ const SiteProfilePage = () => {
               value={
                 dialogMode === "add"
                   ? "Will be stamped on save"
-                  : `Added by ${draftCriterion.addedBy} on ${draftCriterion.addedAt}`
+                  : `Created by ${draftCriterion.createdBy} on ${draftCriterion.createdAt}`
               }
               InputProps={{ readOnly: true }}
               fullWidth
