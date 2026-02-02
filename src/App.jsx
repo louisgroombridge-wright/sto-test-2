@@ -14,6 +14,8 @@ import Sidebar from "./components/Sidebar";
 import PatientProfilePage from "./pages/PatientProfilePage";
 import SiteProfilePage from "./pages/SiteProfilePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
+import CountrySelectionPage from "./pages/CountrySelectionPage";
+import SiteRecommendationPage from "./pages/SiteRecommendationPage";
 
 const defaultPath = "/patient-profile";
 
@@ -257,21 +259,13 @@ const App = () => {
           <Route
             path="/country-selection"
             element={
-              <PlaceholderPage
-                title="Country Selection"
-                description="Evaluate and approve country-level feasibility inputs."
-                {...pageProps}
-              />
+              <CountrySelectionPage />
             }
           />
           <Route
             path="/site-recommendation"
             element={
-              <PlaceholderPage
-                title="Site Recommendation"
-                description="Review prioritized site candidates and assumptions."
-                {...pageProps}
-              />
+              <SiteRecommendationPage />
             }
           />
           <Route
