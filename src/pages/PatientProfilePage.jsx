@@ -51,7 +51,7 @@ const initialProfiles = [
     inclusionSummary: "Stage IV, ECOG 0-1, no prior systemic therapy.",
     exclusionSummary: "Active CNS metastases, prior EGFR TKIs.",
     detailLevel: "Medium",
-    directionalSize: "Large",
+    percentExcluded: "Low",
     confidenceLevel: "Medium",
     source: "Manual",
     status: "Active",
@@ -70,7 +70,7 @@ const initialProfiles = [
     inclusionSummary: "EGFR exon 19/21, no prior TKI exposure.",
     exclusionSummary: "EGFR exon 20 insertion, active brain mets.",
     detailLevel: "High",
-    directionalSize: "Medium",
+    percentExcluded: "Medium",
     confidenceLevel: "High",
     source: "Derived",
     status: "Active",
@@ -89,7 +89,7 @@ const initialProfiles = [
     inclusionSummary: "PD-L1 ≥50%, post chemo-IO.",
     exclusionSummary: "Prior PD-1/PD-L1 combination therapy.",
     detailLevel: "Low",
-    directionalSize: "Small",
+    percentExcluded: "High",
     confidenceLevel: "Low",
     source: "Recommended",
     status: "Active",
@@ -102,7 +102,7 @@ const initialProfiles = [
 ];
 
 const sortableColumns = {
-  directionalSize: ["Small", "Medium", "Large"],
+  percentExcluded: ["Low", "Medium", "High"],
   confidenceLevel: ["Low", "Medium", "High"],
   detailLevel: ["Low", "Medium", "High"],
 };
@@ -116,7 +116,7 @@ const emptyDraft = {
   inclusionSummary: "",
   exclusionSummary: "",
   detailLevel: "Medium",
-  directionalSize: "Medium",
+  percentExcluded: "Medium",
   confidenceLevel: "Medium",
   source: "Manual",
   status: "Active",
@@ -144,7 +144,7 @@ const recommendProfiles = () => {
       inclusionSummary: "ALK/ROS1 positive, post platinum doublet.",
       exclusionSummary: "Prior ALK/ROS1 inhibitor exposure.",
       detailLevel: "High",
-      directionalSize: "Small",
+      percentExcluded: "High",
       confidenceLevel: "Medium",
       recommendedReason: "Introduces a high-specificity cohort for feasibility stress-testing.",
     },
@@ -156,7 +156,7 @@ const recommendProfiles = () => {
       inclusionSummary: "Previously treated, ECOG 0-2.",
       exclusionSummary: "Uncontrolled CNS disease.",
       detailLevel: "Low",
-      directionalSize: "Large",
+      percentExcluded: "Low",
       confidenceLevel: "Low",
       recommendedReason: "Adds a broader option for enrollment projections.",
     },
@@ -167,7 +167,7 @@ const PatientProfilePage = () => {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchValue, setSearchValue] = useState("");
-  const [sortBy, setSortBy] = useState({ key: "directionalSize", order: "asc" });
+  const [sortBy, setSortBy] = useState({ key: "percentExcluded", order: "asc" });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -559,11 +559,11 @@ const PatientProfilePage = () => {
               </TableCell>
               <TableCell>
                 <TableSortLabel
-                  active={sortBy.key === "directionalSize"}
+                  active={sortBy.key === "percentExcluded"}
                   direction={sortBy.order}
-                  onClick={() => handleSort("directionalSize")}
+                  onClick={() => handleSort("percentExcluded")}
                 >
-                  Directional Size
+                  % Excluded
                 </TableSortLabel>
               </TableCell>
               <TableCell>
@@ -638,7 +638,7 @@ const PatientProfilePage = () => {
                   </Typography>
                 </TableCell>
                 <TableCell>{profile.detailLevel}</TableCell>
-                <TableCell>{profile.directionalSize}</TableCell>
+                <TableCell>{profile.percentExcluded}</TableCell>
                 <TableCell>{profile.confidenceLevel}</TableCell>
                 <TableCell>
                   <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
