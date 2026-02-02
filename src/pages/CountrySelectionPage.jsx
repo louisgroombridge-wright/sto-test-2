@@ -151,14 +151,6 @@ const CountrySelectionPage = () => {
     }
   };
 
-  const handleEnrollmentChange = (countryCode, value) => {
-    handleCountryUpdate(countryCode, { enrollmentAssumptions: value });
-  };
-
-  const handleConsiderationsChange = (countryCode, value) => {
-    handleCountryUpdate(countryCode, { profileConsiderations: value });
-  };
-
   const handleTargetSiteChange = (countryCode, value) => {
     const parsed = value === "" ? null : Number(value);
     handleCountryUpdate(countryCode, { targetSiteCount: parsed });
@@ -321,20 +313,12 @@ const CountrySelectionPage = () => {
                       </Typography>
                     </TableCell>
                     <TableCell sx={{ minWidth: 240 }}>
-                      <TextField
-                        multiline
-                        minRows={2}
-                        value={country.profileConsiderations}
-                        onChange={(event) =>
-                          handleConsiderationsChange(
-                            country.countryCode,
-                            event.target.value
-                          )
-                        }
-                        fullWidth
-                        size="small"
-                        helperText="Notes reflect patient profile context, not a score."
-                      />
+                      <Typography variant="body2">
+                        {country.profileConsiderations}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Notes reflect patient profile context, not a score.
+                      </Typography>
                     </TableCell>
                     <TableCell sx={{ minWidth: 210 }}>
                       <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -350,16 +334,9 @@ const CountrySelectionPage = () => {
                       </Stack>
                     </TableCell>
                     <TableCell sx={{ minWidth: 240 }}>
-                      <TextField
-                        multiline
-                        minRows={2}
-                        value={country.enrollmentAssumptions}
-                        onChange={(event) =>
-                          handleEnrollmentChange(country.countryCode, event.target.value)
-                        }
-                        fullWidth
-                        size="small"
-                      />
+                      <Typography variant="body2">
+                        {country.enrollmentAssumptions}
+                      </Typography>
                     </TableCell>
                     <TableCell sx={{ minWidth: 200 }}>
                       <Stack spacing={1} alignItems="flex-start">
