@@ -12,6 +12,7 @@ import { Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import PatientProfilePage from "./pages/PatientProfilePage";
+import SiteProfilePage from "./pages/SiteProfilePage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 
 const defaultPath = "/patient-profile";
@@ -250,11 +251,7 @@ const App = () => {
           <Route
             path="/site-profile"
             element={
-              <PlaceholderPage
-                title="Site Profile"
-                description="Capture site capabilities, staffing, and historical performance."
-                {...pageProps}
-              />
+              <SiteProfilePage />
             }
           />
           <Route
