@@ -6,7 +6,15 @@ import {
   Chip,
   Collapse,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
   Paper,
+  Radio,
+  RadioGroup,
   Stack,
   Table,
   TableBody,
@@ -16,7 +24,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const scenario = {
   name: "Scenario Alpha",
@@ -148,6 +156,12 @@ const SiteRecommendationPage = () => {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [generatedAt, setGeneratedAt] = useState("");
   const [reviewOutOfDate, setReviewOutOfDate] = useState(false);
+  const [decisionDialog, setDecisionDialog] = useState({
+    open: false,
+    countryCode: "",
+    siteId: "",
+  });
+  const [decisionStatus, setDecisionStatus] = useState("Pending");
 
   const handleToggleCountry = (countryCode) => {
     setExpandedCountries((prev) => ({
@@ -172,6 +186,10 @@ const SiteRecommendationPage = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    handleGenerate();
+  }, []);
 
   const handleSelectionChange = (siteId, checked) => {
     setSelectedSites((prev) => ({
@@ -213,12 +231,43 @@ const SiteRecommendationPage = () => {
     }));
   };
 
-  const handleSaveNote = (countryCode, siteId) => {
-    const noteValue = notesDrafts[siteId] || "";
+  const openDecisionDialog = (countryCode, siteId) => {
+    const site = sitesByCountry[countryCode]?.find((entry) => entry.siteId === siteId);
+    setDecisionDialog({
+      open: true,
+      countryCode,
+      siteId,
+    });
+    if (site) {
+      setDecisionStatus(site.status);
+      setNotesDrafts((prev) => ({
+        ...prev,
+        [siteId]: prev[siteId] ?? site.notes,
+      }));
+    }
+  };
+
+  const closeDecisionDialog = () => {
+    setDecisionDialog((prev) => ({
+      ...prev,
+      open: false,
+    }));
+  };
+
+  const handleDecisionSave = () => {
+    const { countryCode, siteId } = decisionDialog;
+    if (!countryCode || !siteId) {
+      return;
+    }
+    const noteValue = notesDrafts[siteId] ?? "";
     updateSite(countryCode, siteId, {
+      status: decisionStatus,
+      decidedBy: decisionStatus === "Pending" ? "" : "J. Morgan",
+      decidedAt: decisionStatus === "Pending" ? "" : formatTimestamp(),
       notes: noteValue,
       overridden: noteValue.trim().length > 0,
     });
+    closeDecisionDialog();
   };
 
   const handleBulkAction = (countryCode, action) => {
@@ -255,6 +304,13 @@ const SiteRecommendationPage = () => {
     }, {});
   }, [sitesByCountry]);
 
+  const activeSite =
+    decisionDialog.open && decisionDialog.countryCode
+      ? sitesByCountry[decisionDialog.countryCode]?.find(
+          (site) => site.siteId === decisionDialog.siteId
+        )
+      : null;
+
   return (
     <Box sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
       <Paper elevation={0} sx={{ p: 3, border: "1px solid rgba(0, 0, 0, 0.12)" }}>
@@ -278,14 +334,11 @@ const SiteRecommendationPage = () => {
           </Stack>
           <Divider />
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
-            <Button
-              variant="contained"
-              onClick={handleGenerate}
-            >
-              {hasGenerated ? "Re-run Recommendations" : "Generate Site Recommendations"}
-            </Button>
             <Typography variant="body2" color="text.secondary">
               {generatedAt ? `Last generated: ${generatedAt}` : "No recommendations generated yet."}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Recommendations run automatically and update the shortlist.
             </Typography>
           </Stack>
           {/* Ranking is advisory only; it does not decide site inclusion. */}
@@ -437,37 +490,12 @@ const SiteRecommendationPage = () => {
                             </TableCell>
                             <TableCell>
                               <Stack spacing={1}>
-                                <Stack direction="row" spacing={1}>
-                                  <Button
-                                    size="small"
-                                    variant="contained"
-                                    onClick={() => handleInclude(country.countryCode, site.siteId)}
-                                  >
-                                    Include
-                                  </Button>
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="error"
-                                    onClick={() => handleExclude(country.countryCode, site.siteId)}
-                                  >
-                                    Exclude
-                                  </Button>
-                                </Stack>
-                                <TextField
-                                  size="small"
-                                  placeholder="Add override note"
-                                  value={notesDrafts[site.siteId] ?? site.notes}
-                                  onChange={(event) => handleNoteChange(site.siteId, event.target.value)}
-                                  multiline
-                                  minRows={2}
-                                />
                                 <Button
                                   size="small"
-                                  variant="text"
-                                  onClick={() => handleSaveNote(country.countryCode, site.siteId)}
+                                  variant="contained"
+                                  onClick={() => openDecisionDialog(country.countryCode, site.siteId)}
                                 >
-                                  Save note
+                                  Update decision
                                 </Button>
                                 <Button size="small" variant="text">
                                   View evidence
@@ -496,6 +524,54 @@ const SiteRecommendationPage = () => {
         })}
       </Stack>
 
+      <Dialog
+        open={decisionDialog.open}
+        onClose={closeDecisionDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Update site decision</DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
+          {activeSite ? (
+            <Stack spacing={0.5}>
+              <Typography variant="subtitle2">{activeSite.siteName}</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {activeSite.siteId} • {activeSite.city}
+              </Typography>
+            </Stack>
+          ) : null}
+          <FormControl>
+            <RadioGroup
+              value={decisionStatus}
+              onChange={(event) => setDecisionStatus(event.target.value)}
+            >
+              <FormControlLabel value="Included" control={<Radio />} label="Include this site" />
+              <FormControlLabel value="Excluded" control={<Radio />} label="Exclude this site" />
+              <FormControlLabel value="Pending" control={<Radio />} label="Keep pending" />
+            </RadioGroup>
+          </FormControl>
+          <TextField
+            label="Override note"
+            placeholder="Add a note when overriding gaps or flags"
+            value={notesDrafts[decisionDialog.siteId] ?? activeSite?.notes ?? ""}
+            onChange={(event) => handleNoteChange(decisionDialog.siteId, event.target.value)}
+            multiline
+            minRows={3}
+          />
+          {activeSite?.knownGaps?.length ? (
+            <Alert severity="warning">
+              Overrides require a note when known gaps exist.
+            </Alert>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeDecisionDialog}>Cancel</Button>
+          <Button variant="contained" onClick={handleDecisionSave}>
+            Save decision
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Paper elevation={0} sx={{ p: 2, border: "1px solid rgba(0, 0, 0, 0.12)" }}>
         <Typography variant="h6" sx={{ mb: 1 }}>
           Validation & downstream flow
@@ -511,7 +587,7 @@ const SiteRecommendationPage = () => {
           ) : null}
           {!hasGenerated ? (
             <Alert severity="info">
-              Recommendations are not generated yet. Use the button above to run them.
+              Recommendations are not generated yet. They will run automatically.
             </Alert>
           ) : null}
           <Typography variant="body2" color="text.secondary">
