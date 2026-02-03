@@ -1,17 +1,19 @@
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
   Box,
   Button,
+  Checkbox,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  Drawer,
   FormControl,
   InputLabel,
+  LinearProgress,
+  Menu,
   MenuItem,
   Select,
   Stack,
@@ -21,810 +23,730 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
   Paper,
-  Checkbox,
 } from "@mui/material";
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Add,
-  ContentCopy,
-  Edit,
-  ExpandMore,
-  Lock,
-  LockOpen,
-  Restore,
-  Archive,
+  Delete,
+  MoreVert,
+  Close,
+  AutoFixHigh,
 } from "@mui/icons-material";
 
-const baselineProfile = {
-  id: "sp-001",
-  name: "Baseline Site Gate",
-  description:
-    "Rules of engagement for sites eligible in this scenario.",
-  status: "Draft",
-  lastModified: "2024-04-14 09:30",
-  modifiedBy: "J. Rivera",
-  downstreamStatus: "Up to date",
-  criteria: [
-    {
-      id: "sc-001",
-      category: "Equipment",
-      label: "On-site CT scanner with contrast protocol",
-      requirement: "Required",
-      source: "Data-derived",
-      notes: "Required for imaging schedule within 7 days.",
-      impact: "Moderate",
-      createdBy: "J. Rivera",
-      createdAt: "2024-04-10 08:30",
-      updatedBy: "J. Rivera",
-      updatedAt: "2024-04-12 16:05",
-      archived: false,
-    },
-    {
-      id: "sc-002",
-      category: "Experience",
-      label: "Prior Phase II oncology trials in last 24 months",
-      requirement: "Required",
-      source: "Qualification required",
-      notes: "Ensures experienced coordination team.",
-      impact: "High",
-      createdBy: "S. Nguyen",
-      createdAt: "2024-04-11 11:40",
-      updatedBy: "S. Nguyen",
-      updatedAt: "2024-04-11 11:40",
-      archived: false,
-    },
-    {
-      id: "sc-003",
-      category: "Facility",
-      label: "Dedicated infusion suite with 8+ chairs",
-      requirement: "Preferred",
-      source: "Expert judgement",
-      notes: "Improves throughput but not mandatory.",
-      impact: "Low",
-      createdBy: "M. Patel",
-      createdAt: "2024-04-12 09:05",
-      updatedBy: "M. Patel",
-      updatedAt: "2024-04-12 09:05",
-      archived: false,
-    },
-    {
-      id: "sc-004",
-      category: "Operations",
-      label: "Ability to support ePRO with weekly reminders",
-      requirement: "Preferred",
-      source: "Data-derived",
-      notes: "Supports compliance for digital outcomes.",
-      impact: "Low",
-      createdBy: "L. Gomez",
-      createdAt: "2024-04-12 13:10",
-      updatedBy: "L. Gomez",
-      updatedAt: "2024-04-12 13:10",
-      archived: false,
-    },
-  ],
-};
-
-const emptyCriterion = {
-  id: "",
-  category: "Equipment",
-  label: "",
-  requirement: "Required",
-  source: "Data-derived",
-  notes: "",
-  impact: "Low",
-  createdBy: "",
-  createdAt: "",
-  updatedBy: "",
-  updatedAt: "",
-  archived: false,
-};
-
-const categories = ["Equipment", "Experience", "Facility", "Operations"];
-const sources = [
-  "Data-derived",
-  "Expert judgement",
-  "Qualification required",
+const systemCriteriaOptions = [
+  "Oncology trial experience",
+  "Dedicated infusion suite",
+  "ePRO compliance support",
+  "On-site imaging",
+  "Weekend staffing",
+  "Dedicated study coordinator",
 ];
-const impactOrder = {
-  Low: 6,
-  Moderate: 10,
-  High: 18,
-};
 
-const requirementMultiplier = {
-  Required: 1,
-  Preferred: 0.5,
-};
+const initialProfiles = [
+  {
+    id: "sp-001",
+    name: "Baseline Site Gate",
+    mustHaveCriteria: [
+      {
+        id: "c-001",
+        label: "On-site imaging",
+        source: "system",
+      },
+      {
+        id: "c-002",
+        label: "Dedicated study coordinator",
+        source: "system",
+      },
+    ],
+    preferredCriteria: [
+      {
+        id: "c-003",
+        label: "Weekend staffing",
+        source: "system",
+      },
+    ],
+    systemKnownCount: 5,
+    unknownCount: 2,
+    avgTimeFirstPatient: 42,
+    avgTimeQuarterPatients: 95,
+    avgTimeThreeQuarterPatients: 160,
+    avgTimeLastPatient: 210,
+    addedBy: "J. Rivera",
+    modifiedBy: "S. Nguyen",
+    modifiedAt: "2024-05-14 09:20",
+  },
+  {
+    id: "sp-002",
+    name: "Accelerated Activation",
+    mustHaveCriteria: [
+      {
+        id: "c-010",
+        label: "Oncology trial experience",
+        source: "system",
+      },
+      {
+        id: "c-011",
+        label: "Custom: capacity for Saturday infusions",
+        source: "custom",
+      },
+    ],
+    preferredCriteria: [
+      {
+        id: "c-012",
+        label: "Dedicated infusion suite",
+        source: "system",
+      },
+      {
+        id: "c-013",
+        label: "Custom: patient travel concierge",
+        source: "custom",
+      },
+    ],
+    systemKnownCount: 6,
+    unknownCount: 1,
+    avgTimeFirstPatient: 34,
+    avgTimeQuarterPatients: 82,
+    avgTimeThreeQuarterPatients: 140,
+    avgTimeLastPatient: 195,
+    addedBy: "L. Gomez",
+    modifiedBy: "L. Gomez",
+    modifiedAt: "2024-05-16 15:45",
+  },
+  {
+    id: "sp-003",
+    name: "Rescue Sites",
+    mustHaveCriteria: [
+      {
+        id: "c-020",
+        label: "ePRO compliance support",
+        source: "system",
+      },
+    ],
+    preferredCriteria: [],
+    systemKnownCount: 4,
+    unknownCount: 4,
+    avgTimeFirstPatient: 48,
+    avgTimeQuarterPatients: 110,
+    avgTimeThreeQuarterPatients: 175,
+    avgTimeLastPatient: 240,
+    addedBy: "M. Patel",
+    modifiedBy: "M. Patel",
+    modifiedAt: "2024-05-18 11:10",
+  },
+];
 
-const formatTimestamp = () => {
-  const now = new Date();
-  return now.toISOString().slice(0, 16).replace("T", " ");
-};
+const tableColumns = [
+  { key: "name", label: "Name" },
+  { key: "mustHaveCount", label: "Must Have Criteria" },
+  { key: "preferredCount", label: "Preferred Criteria" },
+  { key: "systemKnownCount", label: "System Known Criteria" },
+  { key: "unknownCriteria", label: "Unknown Criteria" },
+  { key: "avgTimeFirstPatient", label: "Avg. Time First Patient" },
+  { key: "avgTimeQuarterPatients", label: "Avg. Time 25% Patients" },
+  { key: "avgTimeThreeQuarterPatients", label: "Avg. Time 75% Patients" },
+  { key: "avgTimeLastPatient", label: "Avg. Time Last Patient" },
+  { key: "addedBy", label: "Added By" },
+  { key: "modifiedBy", label: "Modified By" },
+  { key: "actions", label: "Actions" },
+];
+
+const sortKeys = new Set([
+  "mustHaveCount",
+  "preferredCount",
+  "systemKnownCount",
+  "avgTimeFirstPatient",
+  "avgTimeQuarterPatients",
+  "avgTimeThreeQuarterPatients",
+  "avgTimeLastPatient",
+]);
 
 const SiteProfilePage = () => {
-  const [profile, setProfile] = useState(baselineProfile);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState("add");
-  const [draftCriterion, setDraftCriterion] = useState(emptyCriterion);
-  const [profileName, setProfileName] = useState(baselineProfile.name);
-  const [profileDescription, setProfileDescription] = useState(
-    baselineProfile.description
-  );
+  const [profiles, setProfiles] = useState(initialProfiles);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [sortState, setSortState] = useState({
+    key: "avgTimeFirstPatient",
+    direction: "asc",
+  });
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState("create");
+  const [activeProfileId, setActiveProfileId] = useState(null);
+  const [drawerName, setDrawerName] = useState("");
+  const [mustHaveCriteria, setMustHaveCriteria] = useState([]);
+  const [preferredCriteria, setPreferredCriteria] = useState([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [customModalOpen, setCustomModalOpen] = useState(false);
+  const [customQuestion, setCustomQuestion] = useState("");
+  const [customSuggestion, setCustomSuggestion] = useState(null);
+  const [customTarget, setCustomTarget] = useState("mustHave");
+  const [menuAnchor, setMenuAnchor] = useState(null);
+  const [menuProfileId, setMenuProfileId] = useState(null);
 
-  // Criteria shown here are the explicit eligibility gates for downstream steps.
-  const activeCriteria = useMemo(
-    () => profile.criteria.filter((criterion) => !criterion.archived),
-    [profile.criteria]
-  );
+  const sortedProfiles = useMemo(() => {
+    const withCounts = profiles.map((profile) => ({
+      ...profile,
+      mustHaveCount: profile.mustHaveCriteria.length,
+      preferredCount: profile.preferredCriteria.length,
+    }));
 
-  const requiredCount = useMemo(
-    () => activeCriteria.filter((criterion) => criterion.requirement === "Required")
-      .length,
-    [activeCriteria]
-  );
+    const sorted = [...withCounts].sort((a, b) => {
+      const { key, direction } = sortState;
+      const multiplier = direction === "asc" ? 1 : -1;
+      if (!sortKeys.has(key)) {
+        return 0;
+      }
+      return (a[key] - b[key]) * multiplier;
+    });
 
-  const preferredCount = useMemo(
-    () => activeCriteria.filter((criterion) => criterion.requirement === "Preferred")
-      .length,
-    [activeCriteria]
-  );
+    return sorted;
+  }, [profiles, sortState]);
 
-  // Directional impact estimate only; does not list or rank actual sites.
-  const estimatedBaseline = 240;
-  const estimatedRemaining = Math.max(
-    20,
-    Math.round(
-      estimatedBaseline -
-        activeCriteria.reduce(
-          (accumulator, criterion) =>
-            accumulator +
-            impactOrder[criterion.impact] *
-              requirementMultiplier[criterion.requirement],
-          0
-        )
-    )
-  );
-
-  const isLocked = profile.status === "Locked";
-  const isMissingRequired = requiredCount === 0;
-  const isOverlyRestrictive = estimatedRemaining < 60 || requiredCount > 4;
-  const isDownstreamOutOfDate = profile.downstreamStatus === "Out of date";
-
-  // Editing is blocked when a profile is locked; users must duplicate first.
-  const handleOpenDialog = (mode, criterion = emptyCriterion) => {
-    if (isLocked) {
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      setSelectedIds(profiles.map((profile) => profile.id));
       return;
     }
-    setDialogMode(mode);
-    setDraftCriterion(criterion);
-    setDialogOpen(true);
+    setSelectedIds([]);
   };
 
-  const handleCloseDialog = () => {
-    setDialogOpen(false);
-    setDraftCriterion(emptyCriterion);
+  const handleSelectOne = (profileId) => {
+    setSelectedIds((prev) =>
+      prev.includes(profileId)
+        ? prev.filter((id) => id !== profileId)
+        : [...prev, profileId]
+    );
   };
 
-  const handleSaveCriterion = () => {
-    const now = formatTimestamp();
-    if (dialogMode === "add") {
-      const newCriterion = {
-        ...draftCriterion,
-        id: `sc-${Math.random().toString(36).slice(2, 8)}`,
-        createdBy: "Current User",
-        createdAt: now,
-        updatedBy: "Current User",
-        updatedAt: now,
-        archived: false,
+  const handleSort = (key) => {
+    if (!sortKeys.has(key)) {
+      return;
+    }
+    setSortState((prev) => ({
+      key,
+      direction: prev.key === key && prev.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const handleOpenDrawer = (mode, profile = null) => {
+    setDrawerMode(mode);
+    setDrawerOpen(true);
+    setActiveProfileId(profile?.id ?? null);
+    setDrawerName(profile?.name ?? "");
+    setMustHaveCriteria(profile?.mustHaveCriteria ?? []);
+    setPreferredCriteria(profile?.preferredCriteria ?? []);
+    setHasUnsavedChanges(false);
+  };
+
+  const handleCloseDrawer = () => {
+    if (hasUnsavedChanges) {
+      const confirmClose = window.confirm(
+        "Discard unsaved changes to this Site Profile?"
+      );
+      if (!confirmClose) {
+        return;
+      }
+    }
+    setDrawerOpen(false);
+  };
+
+  const handleMenuOpen = (event, profileId) => {
+    setMenuAnchor(event.currentTarget);
+    setMenuProfileId(profileId);
+  };
+
+  const handleMenuClose = () => {
+    setMenuAnchor(null);
+    setMenuProfileId(null);
+  };
+
+  const handleDeleteProfiles = (profileIds) => {
+    const confirmDelete = window.confirm(
+      "Delete the selected Site Profile(s)? This cannot be undone."
+    );
+    if (!confirmDelete) {
+      return;
+    }
+    setProfiles((prev) => prev.filter((profile) => !profileIds.includes(profile.id)));
+    setSelectedIds([]);
+  };
+
+  const handleDuplicateProfile = (profileId) => {
+    setProfiles((prev) => {
+      const profile = prev.find((item) => item.id === profileId);
+      if (!profile) {
+        return prev;
+      }
+      const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+      return [
+        {
+          ...profile,
+          id: `sp-${Math.random().toString(36).slice(2, 8)}`,
+          name: `${profile.name} (Copy)`,
+          modifiedBy: "Current User",
+          modifiedAt: now,
+          addedBy: "Current User",
+        },
+        ...prev,
+      ];
+    });
+  };
+
+  const handleDrawerSubmit = () => {
+    if (!drawerName.trim() || mustHaveCriteria.length === 0) {
+      return;
+    }
+    const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+    if (drawerMode === "create") {
+      const newProfile = {
+        id: `sp-${Math.random().toString(36).slice(2, 8)}`,
+        name: drawerName,
+        mustHaveCriteria,
+        preferredCriteria,
+        systemKnownCount:
+          mustHaveCriteria.filter((item) => item.source === "system").length +
+          preferredCriteria.filter((item) => item.source === "system").length,
+        unknownCount:
+          mustHaveCriteria.filter((item) => item.source === "custom").length +
+          preferredCriteria.filter((item) => item.source === "custom").length,
+        avgTimeFirstPatient: 40,
+        avgTimeQuarterPatients: 90,
+        avgTimeThreeQuarterPatients: 150,
+        avgTimeLastPatient: 205,
+        addedBy: "Current User",
+        modifiedBy: "Current User",
+        modifiedAt: now,
       };
-      setProfile((prev) => ({
-        ...prev,
-        criteria: [...prev.criteria, newCriterion],
-        lastModified: now,
-        modifiedBy: "Current User",
-        downstreamStatus: "Out of date",
-      }));
+      setProfiles((prev) => [newProfile, ...prev]);
     } else {
-      setProfile((prev) => ({
-        ...prev,
-        criteria: prev.criteria.map((criterion) =>
-          criterion.id === draftCriterion.id
+      setProfiles((prev) =>
+        prev.map((profile) =>
+          profile.id === activeProfileId
             ? {
-                ...draftCriterion,
-                updatedBy: "Current User",
-                updatedAt: now,
+                ...profile,
+                name: drawerName,
+                mustHaveCriteria,
+                preferredCriteria,
+                systemKnownCount:
+                  mustHaveCriteria.filter((item) => item.source === "system")
+                    .length +
+                  preferredCriteria.filter((item) => item.source === "system")
+                    .length,
+                unknownCount:
+                  mustHaveCriteria.filter((item) => item.source === "custom")
+                    .length +
+                  preferredCriteria.filter((item) => item.source === "custom")
+                    .length,
+                modifiedBy: "Current User",
+                modifiedAt: now,
               }
-            : criterion
-        ),
-        lastModified: now,
-        modifiedBy: "Current User",
-        downstreamStatus: "Out of date",
-      }));
+            : profile
+        )
+      );
     }
-    handleCloseDialog();
+    setDrawerOpen(false);
   };
 
-  const handleToggleRequirement = (criterionId) => {
-    if (isLocked) {
+  const handleCriteriaChange = (setter, value) => {
+    setHasUnsavedChanges(true);
+    setter(value);
+  };
+
+  const handleOpenCustomModal = (target) => {
+    setCustomTarget(target);
+    setCustomModalOpen(true);
+    setCustomQuestion("");
+    setCustomSuggestion(null);
+  };
+
+  const handleCustomFind = () => {
+    if (!customQuestion.trim()) {
       return;
     }
-    const now = formatTimestamp();
-    setProfile((prev) => ({
-      ...prev,
-      criteria: prev.criteria.map((criterion) =>
-        criterion.id === criterionId
-          ? {
-              ...criterion,
-              requirement:
-                criterion.requirement === "Required" ? "Preferred" : "Required",
-              updatedBy: "Current User",
-              updatedAt: now,
-            }
-          : criterion
-      ),
-      lastModified: now,
-      modifiedBy: "Current User",
-      downstreamStatus: "Out of date",
-    }));
+    // Placeholder integration: simulates Deep Agent suggesting metadata.
+    setCustomSuggestion({
+      label: customQuestion,
+      source: "custom",
+      rationale: "External signals suggest this improves enrollment reliability.",
+      confidence: "Medium",
+    });
   };
 
-  const handleUpdateCriterionField = (criterionId, field, value) => {
-    if (isLocked) {
+  const handleAddCustomSuggestion = () => {
+    if (!customSuggestion) {
       return;
     }
-    const now = formatTimestamp();
-    setProfile((prev) => ({
-      ...prev,
-      criteria: prev.criteria.map((criterion) =>
-        criterion.id === criterionId
-          ? {
-              ...criterion,
-              [field]: value,
-              updatedBy: "Current User",
-              updatedAt: now,
-            }
-          : criterion
-      ),
-      lastModified: now,
-      modifiedBy: "Current User",
-      downstreamStatus: "Out of date",
-    }));
-  };
-
-  // Archive instead of deleting to preserve auditability.
-  const handleArchiveCriterion = (criterionId) => {
-    if (isLocked) {
-      return;
+    const newCriterion = {
+      id: `c-${Math.random().toString(36).slice(2, 8)}`,
+      label: `Custom: ${customSuggestion.label}`,
+      source: "custom",
+    };
+    if (customTarget === "mustHave") {
+      handleCriteriaChange(setMustHaveCriteria, [...mustHaveCriteria, newCriterion]);
+    } else {
+      handleCriteriaChange(
+        setPreferredCriteria,
+        [...preferredCriteria, newCriterion]
+      );
     }
-    const now = formatTimestamp();
-    setProfile((prev) => ({
-      ...prev,
-      criteria: prev.criteria.map((criterion) =>
-        criterion.id === criterionId
-          ? {
-              ...criterion,
-              archived: true,
-              updatedBy: "Current User",
-              updatedAt: now,
-            }
-          : criterion
-      ),
-      lastModified: now,
-      modifiedBy: "Current User",
-      downstreamStatus: "Out of date",
-    }));
+    setCustomModalOpen(false);
   };
 
-  const handleDuplicateProfile = () => {
-    const now = formatTimestamp();
-    setProfile((prev) => ({
-      ...prev,
-      id: `sp-${Math.random().toString(36).slice(2, 8)}`,
-      status: "Draft",
-      name: `${prev.name} (Copy)`,
-      lastModified: now,
-      modifiedBy: "Current User",
-      downstreamStatus: "Out of date",
-    }));
-    setProfileName((prev) => `${prev} (Copy)`);
-    setProfileDescription((prev) => `${prev} (Copy)`);
-  };
+  const criteriaOptionsWithCustom = [...systemCriteriaOptions, "Custom…"];
 
-  const handleResetBaseline = () => {
-    setProfile(baselineProfile);
-    setProfileName(baselineProfile.name);
-    setProfileDescription(baselineProfile.description);
-  };
-
-  const handleToggleLock = () => {
-    if (profile.status === "Locked") {
-      return;
-    }
-    setProfile((prev) => ({
-      ...prev,
-      status: "Locked",
-    }));
-  };
-
-  const handleUpdateProfileName = (event) => {
-    setProfileName(event.target.value);
-  };
-
-  const handleBlurProfileName = () => {
-    if (!profileName.trim()) {
-      setProfileName(profile.name);
-      return;
-    }
-    if (profileName !== profile.name) {
-      const now = formatTimestamp();
-      setProfile((prev) => ({
-        ...prev,
-        name: profileName,
-        lastModified: now,
-        modifiedBy: "Current User",
-      }));
-    }
-  };
-
-  const handleUpdateDescription = (event) => {
-    setProfileDescription(event.target.value);
-  };
-
-  const handleBlurDescription = () => {
-    if (profileDescription !== profile.description) {
-      const now = formatTimestamp();
-      setProfile((prev) => ({
-        ...prev,
-        description: profileDescription,
-        lastModified: now,
-        modifiedBy: "Current User",
-      }));
-    }
-  };
-
-  const groupedCriteria = useMemo(
-    () =>
-      categories.map((category) => ({
-        category,
-        items: activeCriteria.filter(
-          (criterion) => criterion.category === category
-        ),
-      })),
-    [activeCriteria]
+  const renderCriteriaSelect = (label, value, setter, target) => (
+    <FormControl fullWidth size="small">
+      <InputLabel id={`${label}-label`}>{label}</InputLabel>
+      <Select
+        labelId={`${label}-label`}
+        label={label}
+        multiple
+        value={value.map((item) => item.label)}
+        onChange={(event) => {
+          const selected = event.target.value;
+          if (selected.includes("Custom…")) {
+            handleOpenCustomModal(target);
+            return;
+          }
+          const newCriteria = selected.map((itemLabel) => {
+            const isCustom = itemLabel.startsWith("Custom:");
+            return {
+              id: `c-${Math.random().toString(36).slice(2, 8)}`,
+              label: itemLabel,
+              source: isCustom ? "custom" : "system",
+            };
+          });
+          handleCriteriaChange(setter, newCriteria);
+        }}
+        renderValue={(selected) => (
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {selected.map((item) => (
+              <Chip key={item} label={item} size="small" />
+            ))}
+          </Stack>
+        )}
+      >
+        {criteriaOptionsWithCustom.map((option) => (
+          <MenuItem key={option} value={option}>
+            {option}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
   );
 
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
-        <Box
-          sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 2,
-            justifyContent: "space-between",
-          }}
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          spacing={2}
+          alignItems={{ xs: "flex-start", md: "center" }}
+          justifyContent="space-between"
         >
-          <Stack direction="row" spacing={2} flexWrap="wrap">
+          <Typography variant="h5">Site Profiles</Typography>
+          <Stack direction="row" spacing={2} alignItems="center">
             <Button
               variant="contained"
               startIcon={<Add />}
-              onClick={() => handleOpenDialog("add")}
-              disabled={isLocked}
+              onClick={() => handleOpenDrawer("create")}
             >
-              Add Criterion
+              + Create Site Profile
             </Button>
             <Button
               variant="outlined"
-              startIcon={<ContentCopy />}
-              onClick={handleDuplicateProfile}
+              startIcon={<Delete />}
+              onClick={() => handleDeleteProfiles(selectedIds)}
+              disabled={selectedIds.length === 0}
             >
-              Duplicate Profile
+              Delete Site Profile
             </Button>
-            <Button
-              variant="text"
-              startIcon={<Restore />}
-              onClick={handleResetBaseline}
-              disabled={isLocked}
-            >
-              Reset to baseline
-            </Button>
-            <Tooltip
-              title={
-                isLocked
-                  ? "Locked profiles cannot be edited. Duplicate to make changes."
-                  : "Lock this profile to prevent edits."
-              }
-            >
-              <span>
-                <Button
-                  variant="text"
-                  startIcon={isLocked ? <Lock /> : <LockOpen />}
-                  onClick={handleToggleLock}
-                  disabled={isLocked}
-                >
-                  {isLocked ? "Locked" : "Lock Profile"}
-                </Button>
-              </span>
-            </Tooltip>
           </Stack>
-          <Stack direction="row" spacing={2} alignItems="center">
-            <TextField
-              label="Profile name"
-              size="small"
-              value={profileName}
-              onChange={handleUpdateProfileName}
-              onBlur={handleBlurProfileName}
-              disabled={isLocked}
-              sx={{ minWidth: 240 }}
-            />
-            <TextField
-              label="Description (optional)"
-              size="small"
-              value={profileDescription}
-              onChange={handleUpdateDescription}
-              onBlur={handleBlurDescription}
-              disabled={isLocked}
-              sx={{ minWidth: 280 }}
-            />
-            <Chip
-              label={profile.status}
-              color={profile.status === "Locked" ? "default" : "primary"}
-              variant={profile.status === "Locked" ? "outlined" : "filled"}
-            />
-          </Stack>
-        </Box>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-          <Typography variant="body2" color="text.secondary">
-            Last modified: {profile.lastModified} · {profile.modifiedBy}
-          </Typography>
-          <Typography
-            variant="body2"
-            color={isDownstreamOutOfDate ? "warning.main" : "text.secondary"}
-          >
-            Downstream status: {profile.downstreamStatus}
-          </Typography>
         </Stack>
 
         <Paper sx={{ p: 2 }}>
-          <Stack spacing={1}>
-            <Typography variant="h6">Site selection criteria</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Define explicit eligibility gates for this scenario. Changes here
-              invalidate downstream country modeling and site recommendations.
-            </Typography>
-            <Divider />
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Category</TableCell>
-                    <TableCell>Criterion</TableCell>
-                    <TableCell>Requirement</TableCell>
-                    <TableCell>Source</TableCell>
-                    <TableCell>Notes</TableCell>
-                    <TableCell>Population excluded (approx.)</TableCell>
-                    <TableCell align="right">Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {/* Constraint: grouping is visual only; no ordering or ranking implied. */}
-                  {groupedCriteria.map((group) => (
-                    <Fragment key={group.category}>
-                      {group.items.length > 0 && (
-                        <TableRow
-                          key={`${group.category}-header`}
-                          sx={{ backgroundColor: "action.hover" }}
+          {/* Table-first layout keeps the table as the system of record. */}
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={
+                        selectedIds.length === profiles.length &&
+                        profiles.length > 0
+                      }
+                      indeterminate={
+                        selectedIds.length > 0 &&
+                        selectedIds.length < profiles.length
+                      }
+                      onChange={handleSelectAll}
+                    />
+                  </TableCell>
+                  {tableColumns.map((column) => (
+                    <TableCell key={column.key}>
+                      {sortKeys.has(column.key) ? (
+                        <TableSortLabel
+                          active={sortState.key === column.key}
+                          direction={sortState.direction}
+                          onClick={() => handleSort(column.key)}
                         >
-                          <TableCell colSpan={7}>
-                            <Typography variant="subtitle2">
-                              {group.category}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
+                          {column.label}
+                        </TableSortLabel>
+                      ) : (
+                        column.label
                       )}
-                      {group.items.map((criterion) => (
-                        <TableRow key={criterion.id}>
-                          <TableCell>{criterion.category}</TableCell>
-                          <TableCell>
-                            <Stack spacing={0.5}>
-                              <Typography variant="body2">
-                                {criterion.label}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                Created by {criterion.createdBy} on{" "}
-                                {criterion.createdAt}
-                              </Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Checkbox
-                                checked={criterion.requirement === "Required"}
-                                onChange={() =>
-                                  handleToggleRequirement(criterion.id)
-                                }
-                                disabled={isLocked}
-                              />
-                              <Typography variant="body2">
-                                {criterion.requirement}
-                              </Typography>
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <FormControl size="small" fullWidth>
-                              <Select
-                                value={criterion.source}
-                                onChange={(event) =>
-                                  handleUpdateCriterionField(
-                                    criterion.id,
-                                    "source",
-                                    event.target.value
-                                  )
-                                }
-                                disabled={isLocked}
-                              >
-                                {sources.map((source) => (
-                                  <MenuItem key={source} value={source}>
-                                    {source}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                          </TableCell>
-                          <TableCell>
-                            <Tooltip
-                              title={`Updated by ${criterion.updatedBy} on ${criterion.updatedAt}`}
-                            >
-                              <Typography variant="body2">
-                                {criterion.notes || "Add rationale in the edit dialog."}
-                              </Typography>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            {Math.round(
-                              impactOrder[criterion.impact] *
-                                requirementMultiplier[criterion.requirement]
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Stack
-                              direction="row"
-                              spacing={1}
-                              justifyContent="flex-end"
-                            >
-                              <Tooltip
-                                title={
-                                  isLocked
-                                    ? "Duplicate the profile to edit criteria."
-                                    : "Edit criterion"
-                                }
-                              >
-                                <span>
-                                  <Button
-                                    size="small"
-                                    startIcon={<Edit />}
-                                    onClick={() =>
-                                      handleOpenDialog("edit", criterion)
-                                    }
-                                    disabled={isLocked}
-                                  >
-                                    Edit
-                                  </Button>
-                                </span>
-                              </Tooltip>
-                              <Tooltip
-                                title={
-                                  isLocked
-                                    ? "Duplicate the profile to archive."
-                                    : "Archive instead of deleting."
-                                }
-                              >
-                                <span>
-                                  <Button
-                                    size="small"
-                                    color="warning"
-                                    startIcon={<Archive />}
-                                    onClick={() =>
-                                      handleArchiveCriterion(criterion.id)
-                                    }
-                                    disabled={isLocked}
-                                  >
-                                    Archive
-                                  </Button>
-                                </span>
-                              </Tooltip>
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </Fragment>
+                    </TableCell>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Stack>
-        </Paper>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortedProfiles.map((profile) => {
+                  const totalCriteria =
+                    profile.systemKnownCount + profile.unknownCount;
+                  const unknownPercent =
+                    totalCriteria === 0
+                      ? 0
+                      : Math.round((profile.unknownCount / totalCriteria) * 100);
 
-        <Paper sx={{ p: 2 }}>
-          <Stack spacing={2}>
-            <Typography variant="h6">Impact summary</Typography>
-            {/* Constraint: impact is approximate only; no site lists or rankings. */}
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Approximate candidate sites (baseline)
-                </Typography>
-                <Typography variant="h4">{estimatedBaseline}</Typography>
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Approximate remaining after criteria
-                </Typography>
-                <Typography variant="h4">{estimatedRemaining}</Typography>
-              </Box>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Required vs preferred criteria
-                </Typography>
-                <Typography variant="h5">
-                  {requiredCount} Required · {preferredCount} Preferred
-                </Typography>
-              </Box>
-            </Stack>
-            {isMissingRequired && (
-              <Typography color="error" variant="body2">
-                At least one Required criterion must be defined before proceeding.
-              </Typography>
-            )}
-            {isOverlyRestrictive && (
-              <Typography color="warning.main" variant="body2">
-                Warning: Remaining sites are below the minimum threshold or too
-                many Required criteria exist.
-              </Typography>
-            )}
-            <Accordion defaultExpanded>
-              <AccordionSummary expandIcon={<ExpandMore />}>
-                <Typography>Impact signals & downstream effects</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <Stack spacing={1}>
-                  <Typography variant="body2">
-                    {isOverlyRestrictive
-                      ? "Warning: Criteria set may be overly restrictive. Consider downgrading some requirements to Preferred."
-                      : "Criteria strictness looks balanced for exploratory modeling."}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Any change to criteria invalidates country modeling and site
-                    recommendations. Users must re-run downstream steps after
-                    saving updates.
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Last modified: {profile.lastModified} · {profile.modifiedBy}
-                  </Typography>
-                </Stack>
-              </AccordionDetails>
-            </Accordion>
-          </Stack>
+                  return (
+                    <TableRow
+                      key={profile.id}
+                      hover
+                      selected={selectedIds.includes(profile.id)}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedIds.includes(profile.id)}
+                          onChange={() => handleSelectOne(profile.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Stack spacing={0.5}>
+                          <Typography variant="subtitle2">
+                            {profile.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Last updated {profile.modifiedAt}
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{profile.mustHaveCriteria.length}</TableCell>
+                      <TableCell>{profile.preferredCriteria.length}</TableCell>
+                      <TableCell>{profile.systemKnownCount}</TableCell>
+                      <TableCell sx={{ minWidth: 180 }}>
+                        {/* Progress communicates known vs unknown criteria without charts. */}
+                        <Stack spacing={0.5}>
+                          <LinearProgress
+                            variant="determinate"
+                            value={100 - unknownPercent}
+                            sx={{ height: 8, borderRadius: 8 }}
+                          />
+                          <Typography variant="caption" color="text.secondary">
+                            {profile.unknownCount} unknown · {unknownPercent}%
+                          </Typography>
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{profile.avgTimeFirstPatient} days</TableCell>
+                      <TableCell>{profile.avgTimeQuarterPatients} days</TableCell>
+                      <TableCell>{profile.avgTimeThreeQuarterPatients} days</TableCell>
+                      <TableCell>{profile.avgTimeLastPatient} days</TableCell>
+                      <TableCell>{profile.addedBy}</TableCell>
+                      <TableCell>{profile.modifiedBy}</TableCell>
+                      <TableCell>
+                        <Tooltip title="Actions">
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={(event) => handleMenuOpen(event, profile.id)}
+                            startIcon={<MoreVert />}
+                          >
+                            More
+                          </Button>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Paper>
       </Stack>
 
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {dialogMode === "add" ? "Add criterion" : "Edit criterion"}
-        </DialogTitle>
+      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleMenuClose}>
+        <MenuItem
+          onClick={() => {
+            const profile = profiles.find((item) => item.id === menuProfileId);
+            handleMenuClose();
+            if (profile) {
+              handleOpenDrawer("edit", profile);
+            }
+          }}
+        >
+          Edit Site Profile
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuProfileId) {
+              handleDuplicateProfile(menuProfileId);
+            }
+            handleMenuClose();
+          }}
+        >
+          Duplicate Site Profile
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuProfileId) {
+              handleDeleteProfiles([menuProfileId]);
+            }
+            handleMenuClose();
+          }}
+        >
+          Delete Site Profile
+        </MenuItem>
+      </Menu>
+
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={handleCloseDrawer}
+        PaperProps={{ sx: { width: { xs: "100%", md: "38%" }, p: 3 } }}
+      >
+        <Stack spacing={2} sx={{ height: "100%" }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+          >
+            <Typography variant="h6">
+              {drawerMode === "create" ? "Create Site Profile" : "Edit Site Profile"}
+            </Typography>
+            <Button onClick={handleCloseDrawer} startIcon={<Close />}>
+              Close
+            </Button>
+          </Stack>
+          <Divider />
+          <Stack spacing={2} sx={{ flex: 1 }}>
+            {/* Drawer is a workspace for explicit criteria construction. */}
+            <TextField
+              label="Name"
+              required
+              value={drawerName}
+              onChange={(event) => {
+                setDrawerName(event.target.value);
+                setHasUnsavedChanges(true);
+              }}
+              helperText="Required for traceability across scenarios."
+            />
+            {renderCriteriaSelect(
+              "Must Have Criteria",
+              mustHaveCriteria,
+              setMustHaveCriteria,
+              "mustHave"
+            )}
+            <Typography variant="caption" color="text.secondary">
+              Must-have criteria are enforced across downstream feasibility steps.
+            </Typography>
+            {renderCriteriaSelect(
+              "Preferred Criteria (optional)",
+              preferredCriteria,
+              setPreferredCriteria,
+              "preferred"
+            )}
+            <Collapse in>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: "action.hover",
+                }}
+              >
+                <Typography variant="subtitle2">Traceability</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  System-known vs custom criterion sources are preserved for audit
+                  views. This summary updates on submit to protect data lineage.
+                </Typography>
+              </Box>
+            </Collapse>
+          </Stack>
+          <Divider />
+          <Stack direction="row" spacing={2} justifyContent="flex-end">
+            <Button onClick={handleCloseDrawer}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={handleDrawerSubmit}
+              disabled={!drawerName.trim() || mustHaveCriteria.length === 0}
+            >
+              Submit
+            </Button>
+          </Stack>
+        </Stack>
+      </Drawer>
+
+      <Dialog
+        open={customModalOpen}
+        onClose={() => setCustomModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Custom criterion</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel id="category-label">Category</InputLabel>
-              <Select
-                labelId="category-label"
-                label="Category"
-                value={draftCriterion.category}
-                onChange={(event) =>
-                  setDraftCriterion((prev) => ({
-                    ...prev,
-                    category: event.target.value,
-                  }))
-                }
-              >
-                {categories.map((category) => (
-                  <MenuItem key={category} value={category}>
-                    {category}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
             <TextField
-              label="Criterion"
-              value={draftCriterion.label}
-              onChange={(event) =>
-                setDraftCriterion((prev) => ({
-                  ...prev,
-                  label: event.target.value,
-                }))
-              }
-              helperText="Template suggestions are optional; be explicit."
+              label="Question"
+              value={customQuestion}
+              onChange={(event) => setCustomQuestion(event.target.value)}
+              placeholder="Describe the criterion you want to define"
               fullWidth
             />
-            <FormControl fullWidth>
-              <InputLabel id="requirement-label">Requirement type</InputLabel>
-              <Select
-                labelId="requirement-label"
-                label="Requirement type"
-                value={draftCriterion.requirement}
-                onChange={(event) =>
-                  setDraftCriterion((prev) => ({
-                    ...prev,
-                    requirement: event.target.value,
-                  }))
-                }
+            <Collapse in={Boolean(customSuggestion)}>
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  backgroundColor: "background.default",
+                }}
               >
-                {["Required", "Preferred"].map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel id="source-label">Source</InputLabel>
-              <Select
-                labelId="source-label"
-                label="Source"
-                value={draftCriterion.source}
-                onChange={(event) =>
-                  setDraftCriterion((prev) => ({
-                    ...prev,
-                    source: event.target.value,
-                  }))
-                }
-              >
-                {sources.map((source) => (
-                  <MenuItem key={source} value={source}>
-                    {source}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Notes"
-              value={draftCriterion.notes}
-              onChange={(event) =>
-                setDraftCriterion((prev) => ({
-                  ...prev,
-                  notes: event.target.value,
-                }))
-              }
-              placeholder="Explain why this is important"
-              fullWidth
-              multiline
-              rows={2}
-            />
-            <TextField
-              label="Traceability"
-              value={
-                dialogMode === "add"
-                  ? "Will be stamped on save"
-                  : `Created by ${draftCriterion.createdBy} on ${draftCriterion.createdAt}`
-              }
-              InputProps={{ readOnly: true }}
-              fullWidth
-            />
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <AutoFixHigh fontSize="small" color="primary" />
+                    <Typography variant="subtitle2">
+                      Deep Agent suggestion
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2">
+                    {customSuggestion?.rationale}
+                  </Typography>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Chip label={`Confidence: ${customSuggestion?.confidence}`} size="small" />
+                    <Chip label="Source: Custom" size="small" variant="outlined" />
+                  </Stack>
+                  <Button
+                    variant="outlined"
+                    onClick={handleAddCustomSuggestion}
+                  >
+                    Confirm & add criterion
+                  </Button>
+                </Stack>
+              </Box>
+            </Collapse>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={() => setCustomModalOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
-            onClick={handleSaveCriterion}
-            disabled={!draftCriterion.label.trim()}
+            onClick={handleCustomFind}
+            disabled={!customQuestion.trim()}
           >
-            Save criterion
+            Find with Deep Agent
           </Button>
         </DialogActions>
       </Dialog>
