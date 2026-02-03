@@ -1,8 +1,11 @@
 import {
   Box,
   Button,
+  Card,
+  CardContent,
   Checkbox,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -10,6 +13,8 @@ import {
   Divider,
   Drawer,
   FormControl,
+  Grid,
+  IconButton,
   InputLabel,
   Menu,
   MenuItem,
@@ -20,16 +25,20 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TablePagination,
   TableRow,
-  TableSortLabel,
   TextField,
   Tooltip,
   Typography,
   Paper,
 } from "@mui/material";
-import { useMemo, useState } from "react";
-import { MoreVert } from "@mui/icons-material";
+import {
+  Add,
+  Close,
+  DeleteOutline,
+  MoreVert,
+  UploadFile,
+} from "@mui/icons-material";
+import { Fragment, useMemo, useRef, useState } from "react";
 
 const biomarkersCatalog = [
   "EGFR",
@@ -45,388 +54,454 @@ const initialProfiles = [
   {
     id: "pp-001",
     name: "Broad NSCLC",
-    disease: "Non-small cell lung cancer",
-    lineOfTherapy: "1L",
-    biomarkers: ["EGFR", "PD-L1"],
-    inclusionSummary: "Stage IV, ECOG 0-1, no prior systemic therapy.",
-    exclusionSummary: "Active CNS metastases, prior EGFR TKIs.",
-    detailLevel: "Medium",
-    percentExcluded: "Low",
-    confidenceLevel: "Medium",
+    indication: "Non-small cell lung cancer",
+    totalPatients: 1240,
+    patientsPerCriteria: "120-240",
+    sampleSize: 320,
+    benchmarkStudies: ["LUX-Lung 3", "KEYNOTE-189"],
     source: "Manual",
-    status: "Active",
-    creationMethod: "Manual",
-    parentId: null,
-    recommendedReason: "",
-    lastModified: "2024-04-10 09:30",
-    isActiveSelection: true,
+    addedBy: "Dr. K. Patel",
+    modifiedBy: "E. Garner",
+    inclusionCriteria: [
+      "Stage IV",
+      "ECOG 0-1",
+      "No prior systemic therapy",
+    ],
+    exclusionCriteria: ["Active CNS metastases", "Prior EGFR TKIs"],
+    criteriaTimeline: [
+      {
+        criterion: "Stage IV",
+        value: "Required",
+        ttfp: "3.2 wks",
+        t25: "8.1 wks",
+        t75: "18.4 wks",
+        tLast: "26.9 wks",
+      },
+      {
+        criterion: "ECOG 0-1",
+        value: "Strict",
+        ttfp: "4.0 wks",
+        t25: "9.6 wks",
+        t75: "20.2 wks",
+        tLast: "29.4 wks",
+      },
+      {
+        criterion: "No prior systemic therapy",
+        value: "Directional",
+        ttfp: "5.1 wks",
+        t25: "11.3 wks",
+        t75: "22.7 wks",
+        tLast: "31.5 wks",
+      },
+    ],
+    kpis: [
+      { label: "Sample Size", value: "320", source: "Modeled" },
+      { label: "Median Survival", value: "16.8 mo", source: "Benchmark" },
+      { label: "Hazard Ratio", value: "0.74", source: "High confidence" },
+      { label: "Response Rate", value: "38%", source: "Observed" },
+    ],
+    referenceStudies: [
+      {
+        name: "LUX-Lung 3",
+        type: "Phase III",
+        similarity: "High",
+        outcome: "PFS benefit in 1L EGFR+",
+      },
+      {
+        name: "KEYNOTE-189",
+        type: "Phase III",
+        similarity: "Medium",
+        outcome: "IO + chemo OS improvement",
+      },
+    ],
   },
   {
     id: "pp-002",
     name: "EGFR+ Focused",
-    disease: "Non-small cell lung cancer",
-    lineOfTherapy: "1L",
-    biomarkers: ["EGFR"],
-    inclusionSummary: "EGFR exon 19/21, no prior TKI exposure.",
-    exclusionSummary: "EGFR exon 20 insertion, active brain mets.",
-    detailLevel: "High",
-    percentExcluded: "Medium",
-    confidenceLevel: "High",
-    source: "Derived",
-    status: "Active",
-    creationMethod: "Variant",
-    parentId: "pp-001",
-    recommendedReason: "",
-    lastModified: "2024-04-12 14:10",
-    isActiveSelection: true,
+    indication: "Non-small cell lung cancer",
+    totalPatients: 420,
+    patientsPerCriteria: "60-90",
+    sampleSize: 180,
+    benchmarkStudies: ["FLAURA", "LUX-Lung 7"],
+    source: "Imported",
+    addedBy: "M. Chen",
+    modifiedBy: "M. Chen",
+    inclusionCriteria: ["EGFR exon 19/21", "No prior TKI"],
+    exclusionCriteria: ["EGFR exon 20 insertion"],
+    criteriaTimeline: [
+      {
+        criterion: "EGFR exon 19/21",
+        value: "Required",
+        ttfp: "2.6 wks",
+        t25: "6.2 wks",
+        t75: "14.4 wks",
+        tLast: "21.8 wks",
+      },
+      {
+        criterion: "No prior TKI",
+        value: "Directional",
+        ttfp: "3.4 wks",
+        t25: "7.9 wks",
+        t75: "16.5 wks",
+        tLast: "24.7 wks",
+      },
+    ],
+    kpis: [
+      { label: "Sample Size", value: "180", source: "Modeled" },
+      { label: "Median Survival", value: "22.3 mo", source: "Benchmark" },
+      { label: "Hazard Ratio", value: "0.62", source: "Medium confidence" },
+      { label: "Response Rate", value: "58%", source: "Observed" },
+    ],
+    referenceStudies: [
+      {
+        name: "FLAURA",
+        type: "Phase III",
+        similarity: "High",
+        outcome: "OS improvement with osimertinib",
+      },
+      {
+        name: "LUX-Lung 7",
+        type: "Phase II",
+        similarity: "Medium",
+        outcome: "PFS gains in EGFR+",
+      },
+    ],
   },
   {
     id: "pp-003",
     name: "PD-L1 Enriched",
-    disease: "Non-small cell lung cancer",
-    lineOfTherapy: "2L",
-    biomarkers: ["PD-L1"],
-    inclusionSummary: "PD-L1 ≥50%, post chemo-IO.",
-    exclusionSummary: "Prior PD-1/PD-L1 combination therapy.",
-    detailLevel: "Low",
-    percentExcluded: "High",
-    confidenceLevel: "Low",
+    indication: "Non-small cell lung cancer",
+    totalPatients: 640,
+    patientsPerCriteria: "80-130",
+    sampleSize: 240,
+    benchmarkStudies: ["KEYNOTE-010", "CheckMate 057"],
     source: "Recommended",
-    status: "Active",
-    creationMethod: "Recommended",
-    parentId: null,
-    recommendedReason: "AI suggested a more restrictive cohort for sensitivity.",
-    lastModified: "2024-04-12 16:45",
-    isActiveSelection: false,
+    addedBy: "S. Ivanov",
+    modifiedBy: "S. Ivanov",
+    inclusionCriteria: ["PD-L1 ≥50%", "Post chemo-IO"],
+    exclusionCriteria: ["Prior PD-1/PD-L1 combo"],
+    criteriaTimeline: [
+      {
+        criterion: "PD-L1 ≥50%",
+        value: "Required",
+        ttfp: "3.8 wks",
+        t25: "9.1 wks",
+        t75: "19.8 wks",
+        tLast: "28.2 wks",
+      },
+      {
+        criterion: "Post chemo-IO",
+        value: "Directional",
+        ttfp: "4.5 wks",
+        t25: "10.4 wks",
+        t75: "21.7 wks",
+        tLast: "30.6 wks",
+      },
+    ],
+    kpis: [
+      { label: "Sample Size", value: "240", source: "Modeled" },
+      { label: "Median Survival", value: "14.1 mo", source: "Benchmark" },
+      { label: "Hazard Ratio", value: "0.81", source: "Low confidence" },
+      { label: "Response Rate", value: "33%", source: "Observed" },
+    ],
+    referenceStudies: [
+      {
+        name: "KEYNOTE-010",
+        type: "Phase II",
+        similarity: "Medium",
+        outcome: "OS benefit in PD-L1 high",
+      },
+      {
+        name: "CheckMate 057",
+        type: "Phase III",
+        similarity: "Low",
+        outcome: "OS benefit in nonsquamous",
+      },
+    ],
   },
 ];
-
-const sortableColumns = {
-  percentExcluded: ["Low", "Medium", "High"],
-  confidenceLevel: ["Low", "Medium", "High"],
-  detailLevel: ["Low", "Medium", "High"],
-};
 
 const emptyDraft = {
   id: "",
   name: "",
-  disease: "",
-  lineOfTherapy: "",
-  biomarkers: [],
-  inclusionSummary: "",
-  exclusionSummary: "",
-  detailLevel: "Medium",
-  percentExcluded: "Medium",
-  confidenceLevel: "Medium",
+  indication: "",
+  totalPatients: "",
+  patientsPerCriteria: "",
+  sampleSize: "",
+  benchmarkStudies: [],
   source: "Manual",
-  status: "Active",
-  creationMethod: "Manual",
-  parentId: null,
-  recommendedReason: "",
-  lastModified: "",
-  isActiveSelection: false,
+  addedBy: "",
+  modifiedBy: "",
+  inclusionCriteria: [],
+  exclusionCriteria: [],
+  biomarkers: [],
 };
 
-const formatTimestamp = () => {
-  const now = new Date();
-  return now.toISOString().slice(0, 16).replace("T", " ");
-};
-
-const recommendProfiles = () => {
-  // Placeholder for AI-assisted profile generation.
-  // In a real implementation, this would call a service to create 2-5 options.
-  return [
-    {
-      name: "Narrow Biomarker+ Cohort",
-      disease: "Non-small cell lung cancer",
-      lineOfTherapy: "2L",
-      biomarkers: ["ALK", "ROS1"],
-      inclusionSummary: "ALK/ROS1 positive, post platinum doublet.",
-      exclusionSummary: "Prior ALK/ROS1 inhibitor exposure.",
-      detailLevel: "High",
-      percentExcluded: "High",
-      confidenceLevel: "Medium",
-      recommendedReason: "Introduces a high-specificity cohort for feasibility stress-testing.",
-    },
-    {
-      name: "Broad 2L Population",
-      disease: "Non-small cell lung cancer",
-      lineOfTherapy: "2L",
-      biomarkers: ["PD-L1"],
-      inclusionSummary: "Previously treated, ECOG 0-2.",
-      exclusionSummary: "Uncontrolled CNS disease.",
-      detailLevel: "Low",
-      percentExcluded: "Low",
-      confidenceLevel: "Low",
-      recommendedReason: "Adds a broader option for enrollment projections.",
-    },
-  ];
+const placeholderSuggestions = {
+  inclusion: [
+    "ECOG 0-1",
+    "No prior systemic therapy",
+    "Age ≥ 18",
+  ],
+  exclusion: [
+    "Active CNS metastases",
+    "Concurrent investigational agents",
+  ],
 };
 
 const PatientProfilePage = () => {
   const [profiles, setProfiles] = useState(initialProfiles);
+  const [expandedId, setExpandedId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [searchValue, setSearchValue] = useState("");
-  const [sortBy, setSortBy] = useState({ key: "percentExcluded", order: "asc" });
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState("new");
-  const [draftProfile, setDraftProfile] = useState(emptyDraft);
   const [actionAnchor, setActionAnchor] = useState(null);
   const [actionProfileId, setActionProfileId] = useState(null);
-  const [compareOpen, setCompareOpen] = useState(false);
-  const [selectionError, setSelectionError] = useState("");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState("create");
+  const [draftProfile, setDraftProfile] = useState(emptyDraft);
+  const [drawerTouched, setDrawerTouched] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [newBenchmark, setNewBenchmark] = useState("");
+  const [newInclusion, setNewInclusion] = useState("");
+  const [newExclusion, setNewExclusion] = useState("");
+  const [suggestOpen, setSuggestOpen] = useState(false);
+  const [suggestForm, setSuggestForm] = useState({
+    studyTitle: "",
+    indication: "",
+    description: "",
+  });
+  const [suggestions, setSuggestions] = useState({ inclusion: [], exclusion: [] });
+  const fileInputRef = useRef(null);
+  const initialDraftRef = useRef(emptyDraft);
 
   const selectedProfiles = useMemo(
     () => profiles.filter((profile) => selectedIds.includes(profile.id)),
     [profiles, selectedIds]
   );
 
-  const filteredProfiles = useMemo(() => {
-    if (!searchValue.trim()) {
-      return profiles;
+  const isSaveDisabled = !draftProfile.name.trim() || !draftProfile.indication.trim();
+
+  const isDraftDirty = useMemo(() => {
+    if (!drawerTouched) {
+      return false;
     }
-    const search = searchValue.toLowerCase();
-    return profiles.filter((profile) => {
-      const biomarkerMatch = profile.biomarkers.some((marker) =>
-        marker.toLowerCase().includes(search)
-      );
-      return (
-        profile.name.toLowerCase().includes(search) ||
-        profile.disease.toLowerCase().includes(search) ||
-        biomarkerMatch
-      );
-    });
-  }, [profiles, searchValue]);
+    return JSON.stringify(draftProfile) !== JSON.stringify(initialDraftRef.current);
+  }, [drawerTouched, draftProfile]);
 
-  const sortedProfiles = useMemo(() => {
-    const options = sortableColumns[sortBy.key];
-    return [...filteredProfiles].sort((a, b) => {
-      const aIndex = options.indexOf(a[sortBy.key]);
-      const bIndex = options.indexOf(b[sortBy.key]);
-      if (aIndex === bIndex) {
-        return a.name.localeCompare(b.name);
-      }
-      return sortBy.order === "asc" ? aIndex - bIndex : bIndex - aIndex;
-    });
-  }, [filteredProfiles, sortBy]);
-
-  const pagedProfiles = useMemo(() => {
-    const start = page * rowsPerPage;
-    return sortedProfiles.slice(start, start + rowsPerPage);
-  }, [sortedProfiles, page, rowsPerPage]);
-
-  const activeCount = useMemo(
-    () => profiles.filter((profile) => profile.isActiveSelection).length,
-    [profiles]
-  );
-
-  const showBlocker =
-    profiles.length === 0 || activeCount < 1 || activeCount > 3;
-
-  const blockerMessage = useMemo(() => {
-    if (profiles.length === 0) {
-      return "Add at least one patient profile option to continue.";
-    }
-    if (activeCount < 1) {
-      return "Select at least one active profile to proceed to the next step.";
-    }
-    if (activeCount > 3) {
-      return "Only up to 3 profiles can be marked active for downstream steps.";
-    }
-    return "";
-  }, [profiles.length, activeCount]);
-
-  const handleSort = (key) => {
-    setSortBy((prev) => {
-      if (prev.key === key) {
-        return { key, order: prev.order === "asc" ? "desc" : "asc" };
-      }
-      return { key, order: "asc" };
-    });
+  const handleRowExpand = (profileId) => {
+    setExpandedId((prev) => (prev === profileId ? null : profileId));
   };
 
-  const handleSelectAll = (event) => {
-    if (event.target.checked) {
-      setSelectedIds(filteredProfiles.map((profile) => profile.id));
-      setSelectionError("");
+  const handleSelectRow = (profileId) => {
+    setSelectedIds((prev) =>
+      prev.includes(profileId)
+        ? prev.filter((id) => id !== profileId)
+        : [...prev, profileId]
+    );
+  };
+
+  const openDrawer = (mode, profile = emptyDraft) => {
+    setDrawerMode(mode);
+    setDraftProfile(profile);
+    initialDraftRef.current = profile;
+    setDrawerTouched(false);
+    setDrawerOpen(true);
+  };
+
+  const requestCloseDrawer = () => {
+    if (isDraftDirty) {
+      setDiscardConfirmOpen(true);
       return;
     }
-    setSelectedIds([]);
-    setSelectionError("");
+    setDrawerOpen(false);
   };
 
-  const handleSelectRow = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
-    );
-    setSelectionError("");
+  const handleDiscardChanges = () => {
+    setDiscardConfirmOpen(false);
+    setDrawerOpen(false);
   };
 
-  const openDialog = (mode, profile = emptyDraft) => {
-    setDialogMode(mode);
-    setDraftProfile(profile);
-    setDialogOpen(true);
-  };
+  const handleSaveProfile = () => {
+    if (isSaveDisabled) {
+      return;
+    }
 
-  const handleDialogClose = () => {
-    setDialogOpen(false);
-    setDraftProfile(emptyDraft);
-  };
-
-  const handleDialogSave = () => {
-    const timestamp = formatTimestamp();
-    if (dialogMode === "edit") {
+    if (drawerMode === "edit") {
       setProfiles((prev) =>
         prev.map((profile) =>
           profile.id === draftProfile.id
-            ? { ...draftProfile, lastModified: timestamp }
+            ? { ...profile, ...draftProfile, modifiedBy: "You" }
             : profile
         )
       );
     } else {
-      const derivedSource =
-        dialogMode === "variant" ? "Derived" : draftProfile.source;
       const newProfile = {
         ...draftProfile,
         id: `pp-${Math.random().toString(36).slice(2, 8)}`,
-        source: derivedSource,
-        lastModified: timestamp,
+        totalPatients: draftProfile.totalPatients || "—",
+        patientsPerCriteria: draftProfile.patientsPerCriteria || "—",
+        sampleSize: draftProfile.sampleSize || "—",
+        benchmarkStudies: draftProfile.benchmarkStudies || [],
+        source: draftProfile.source || "Manual",
+        addedBy: draftProfile.addedBy || "You",
+        modifiedBy: draftProfile.modifiedBy || "You",
+        criteriaTimeline: [],
+        kpis: [],
+        referenceStudies: [],
       };
       setProfiles((prev) => [newProfile, ...prev]);
     }
-    handleDialogClose();
+
+    setDrawerOpen(false);
   };
 
-  const handleRecommendProfiles = () => {
-    const recommended = recommendProfiles();
-    const timestamp = formatTimestamp();
-    const newProfiles = recommended.map((profile) => ({
-      ...emptyDraft,
-      ...profile,
-      id: `pp-${Math.random().toString(36).slice(2, 8)}`,
-      source: "Recommended",
-      creationMethod: "Recommended",
-      status: "Active",
-      lastModified: timestamp,
-    }));
-    setProfiles((prev) => [...newProfiles, ...prev]);
-  };
-
-  const handleBulkDuplicate = () => {
-    const timestamp = formatTimestamp();
-    setProfiles((prev) => [
-      ...selectedProfiles.map((profile) => ({
-        ...profile,
-        id: `pp-${Math.random().toString(36).slice(2, 8)}`,
-        name: `${profile.name} (Copy)`,
-        source: "Derived",
-        creationMethod: "Variant",
-        parentId: profile.id,
-        lastModified: timestamp,
-      })),
-      ...prev,
-    ]);
-    setSelectedIds([]);
-  };
-
-  const handleBulkArchive = () => {
-    setProfiles((prev) =>
-      prev.map((profile) =>
-        selectedIds.includes(profile.id)
-          ? { ...profile, status: "Archived", isActiveSelection: false }
-          : profile
-      )
-    );
-    setSelectedIds([]);
-  };
-
-  const handleBulkCompare = () => {
-    setCompareOpen(true);
-  };
-
-  const handleSetActive = () => {
-    const currentActiveNotSelected = profiles.filter(
-      (profile) =>
-        profile.isActiveSelection && !selectedIds.includes(profile.id)
-    ).length;
-    const nextActiveCount = currentActiveNotSelected + selectedProfiles.length;
-    // Guardrail: downstream steps allow 1-3 active profiles only.
-    if (nextActiveCount > 3) {
-      setSelectionError("Select up to 3 profiles to set as active.");
-      return;
-    }
-    setSelectionError("");
-    setProfiles((prev) =>
-      prev.map((profile) =>
-        selectedIds.includes(profile.id)
-          ? { ...profile, isActiveSelection: true }
-          : profile
-      )
-    );
-    setSelectedIds([]);
-  };
-
-  const handleRowActionOpen = (event, profileId) => {
+  const handleActionOpen = (event, profileId) => {
     setActionAnchor(event.currentTarget);
     setActionProfileId(profileId);
   };
 
-  const handleRowActionClose = () => {
+  const handleActionClose = () => {
     setActionAnchor(null);
     setActionProfileId(null);
   };
 
-  const handleAction = (action) => {
+  const handleRowAction = (action) => {
     const profile = profiles.find((item) => item.id === actionProfileId);
-    handleRowActionClose();
+    handleActionClose();
     if (!profile) {
       return;
     }
-    const timestamp = formatTimestamp();
 
     if (action === "edit") {
-      openDialog("edit", profile);
+      openDrawer("edit", profile);
     }
+
     if (action === "duplicate") {
-      setProfiles((prev) => [
-        {
-          ...profile,
-          id: `pp-${Math.random().toString(36).slice(2, 8)}`,
-          name: `${profile.name} (Copy)`,
-          source: "Derived",
-          creationMethod: "Variant",
-          parentId: profile.id,
-          lastModified: timestamp,
-        },
-        ...prev,
-      ]);
-    }
-    if (action === "variant") {
-      openDialog("variant", {
+      openDrawer("duplicate", {
         ...profile,
         id: "",
-        name: `${profile.name} Variant`,
-        source: "Derived",
-        creationMethod: "Variant",
-        parentId: profile.id,
+        name: `${profile.name} (Copy)`,
+        source: "Manual",
+        addedBy: "You",
+        modifiedBy: "You",
       });
     }
-    if (action === "archive") {
-      setProfiles((prev) =>
-        prev.map((item) =>
-          item.id === profile.id
-            ? {
-                ...item,
-                status: "Archived",
-                isActiveSelection: false,
-                lastModified: timestamp,
-              }
-            : item
-        )
-      );
+
+    if (action === "delete") {
+      setSelectedIds([profile.id]);
+      setDeleteConfirmOpen(true);
     }
+
+    if (action === "compare") {
+      setSelectedIds([profile.id]);
+      setComparisonOpen(true);
+    }
+  };
+
+  const handleDeleteProfiles = () => {
+    setProfiles((prev) => prev.filter((profile) => !selectedIds.includes(profile.id)));
+    setSelectedIds([]);
+    setDeleteConfirmOpen(false);
+  };
+
+  const handleDraftChange = (field, value) => {
+    setDrawerTouched(true);
+    setDraftProfile((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddBenchmark = () => {
+    const trimmed = newBenchmark.trim();
+    if (!trimmed) {
+      return;
+    }
+    handleDraftChange("benchmarkStudies", [
+      ...(draftProfile.benchmarkStudies || []),
+      trimmed,
+    ]);
+    setNewBenchmark("");
+  };
+
+  const handleRemoveBenchmark = (study) => {
+    handleDraftChange(
+      "benchmarkStudies",
+      draftProfile.benchmarkStudies.filter((item) => item !== study)
+    );
+  };
+
+  const handleAddCriterion = (type) => {
+    const value = type === "inclusion" ? newInclusion : newExclusion;
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    const field = type === "inclusion" ? "inclusionCriteria" : "exclusionCriteria";
+    handleDraftChange(field, [...(draftProfile[field] || []), trimmed]);
+    if (type === "inclusion") {
+      setNewInclusion("");
+    } else {
+      setNewExclusion("");
+    }
+  };
+
+  const handleRemoveCriterion = (type, value) => {
+    const field = type === "inclusion" ? "inclusionCriteria" : "exclusionCriteria";
+    handleDraftChange(
+      field,
+      draftProfile[field].filter((item) => item !== value)
+    );
+  };
+
+  const handleOpenSuggest = () => {
+    setSuggestOpen(true);
+    setSuggestions({ inclusion: [], exclusion: [] });
+    setSuggestForm((prev) => ({
+      ...prev,
+      indication: prev.indication || draftProfile.indication,
+    }));
+  };
+
+  const handleGenerateSuggestions = () => {
+    setSuggestions(placeholderSuggestions);
+  };
+
+  const handleAcceptSuggestion = (type, value) => {
+    const field = type === "inclusion" ? "inclusionCriteria" : "exclusionCriteria";
+    handleDraftChange(field, [...(draftProfile[field] || []), value]);
+    setSuggestions((prev) => ({
+      ...prev,
+      [type]: prev[type].filter((item) => item !== value),
+    }));
+  };
+
+  const handleRejectSuggestion = (type, value) => {
+    setSuggestions((prev) => ({
+      ...prev,
+      [type]: prev[type].filter((item) => item !== value),
+    }));
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+    // Placeholder: parse document and populate profile fields.
+    handleDraftChange("name", draftProfile.name || "Imported Profile");
+    handleDraftChange("indication", draftProfile.indication || "Imported indication");
+    handleDraftChange("inclusionCriteria", [
+      ...(draftProfile.inclusionCriteria || []),
+      "Imported inclusion criterion",
+    ]);
+    handleDraftChange("exclusionCriteria", [
+      ...(draftProfile.exclusionCriteria || []),
+      "Imported exclusion criterion",
+    ]);
+    event.target.value = "";
   };
 
   return (
@@ -441,445 +516,633 @@ const PatientProfilePage = () => {
           flexWrap: "wrap",
         }}
       >
+        <Typography variant="h5">Patient Profiles</Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button
             variant="contained"
-            onClick={() => openDialog("new", emptyDraft)}
+            onClick={() => openDrawer("create", emptyDraft)}
           >
-            + New Patient Profile
+            + Create Patient Profile
           </Button>
-          <Button variant="outlined" onClick={handleRecommendProfiles}>
-            Recommend Profiles
+          <Button
+            variant="outlined"
+            disabled={selectedIds.length === 0}
+            onClick={() => setDeleteConfirmOpen(true)}
+          >
+            Delete Patient Profile
           </Button>
         </Box>
-        <TextField
-          placeholder="Search by name, indication, biomarker"
-          size="small"
-          value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
-          sx={{ minWidth: 280 }}
-        />
       </Box>
-
-      {showBlocker ? (
-        <Paper
-          elevation={0}
-          sx={{
-            mb: 2,
-            p: 2,
-            border: "1px solid rgba(0, 0, 0, 0.12)",
-            backgroundColor: "rgba(255, 193, 7, 0.12)",
-          }}
-        >
-          <Typography variant="subtitle2">{blockerMessage}</Typography>
-        </Paper>
-      ) : null}
-
-      {selectedIds.length > 0 ? (
-        <Paper
-          elevation={0}
-          sx={{
-            mb: 2,
-            p: 2,
-            border: "1px solid rgba(0, 0, 0, 0.12)",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 1,
-            alignItems: "center",
-          }}
-        >
-          <Typography variant="subtitle2" sx={{ mr: 2 }}>
-            {selectedIds.length} selected
-          </Typography>
-          <Button size="small" variant="outlined" onClick={handleBulkDuplicate}>
-            Duplicate selected
-          </Button>
-          <Button size="small" variant="outlined" onClick={handleBulkArchive}>
-            Archive selected
-          </Button>
-          <Button size="small" variant="outlined" onClick={handleBulkCompare}>
-            Compare selected
-          </Button>
-          <Tooltip
-            title={
-              selectedIds.length > 3
-                ? "Select up to 3 profiles to set as active."
-                : ""
-            }
-          >
-            <span>
-              <Button
-                size="small"
-                variant="contained"
-                onClick={handleSetActive}
-                disabled={selectedIds.length > 3}
-              >
-                Set as active for next step
-              </Button>
-            </span>
-          </Tooltip>
-          {selectionError ? (
-            <Typography variant="caption" color="error">
-              {selectionError}
-            </Typography>
-          ) : null}
-        </Paper>
-      ) : null}
 
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
           <TableHead>
             <TableRow>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={
-                    selectedIds.length > 0 &&
-                    selectedIds.length < filteredProfiles.length
-                  }
-                  checked={
-                    filteredProfiles.length > 0 &&
-                    selectedIds.length === filteredProfiles.length
-                  }
-                  onChange={handleSelectAll}
-                />
-              </TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Indication</TableCell>
-              <TableCell>Line of Therapy</TableCell>
-              <TableCell>Biomarkers</TableCell>
-              <TableCell>Eligibility Snapshot</TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortBy.key === "detailLevel"}
-                  direction={sortBy.order}
-                  onClick={() => handleSort("detailLevel")}
-                >
-                  Detail Level
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortBy.key === "percentExcluded"}
-                  direction={sortBy.order}
-                  onClick={() => handleSort("percentExcluded")}
-                >
-                  % Excluded
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={sortBy.key === "confidenceLevel"}
-                  direction={sortBy.order}
-                  onClick={() => handleSort("confidenceLevel")}
-                >
-                  Confidence
-                </TableSortLabel>
-              </TableCell>
+              <TableCell>Total Patients</TableCell>
+              <TableCell>No. Patients / Criteria</TableCell>
+              <TableCell>Sample Size</TableCell>
+              <TableCell>No. Benchmark Studies</TableCell>
               <TableCell>Source</TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell>Added By</TableCell>
+              <TableCell>Modified By</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {pagedProfiles.map((profile) => (
-              <TableRow key={profile.id} hover>
-                <TableCell padding="checkbox">
-                  <Checkbox
-                    checked={selectedIds.includes(profile.id)}
-                    onChange={() => handleSelectRow(profile.id)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: "flex", flexDirection: "column" }}>
-                    <Typography variant="subtitle2">{profile.name}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Last updated {profile.lastModified}
-                    </Typography>
-                    {profile.isActiveSelection ? (
-                      <Chip
-                        label="Active option"
-                        size="small"
-                        color="success"
-                        variant="outlined"
-                        sx={{ mt: 0.5, width: "fit-content" }}
-                      />
-                    ) : null}
-                  </Box>
-                </TableCell>
-                <TableCell>{profile.disease}</TableCell>
-                <TableCell>{profile.lineOfTherapy}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                    {profile.biomarkers.slice(0, 2).map((marker) => (
-                      <Chip
-                        key={marker}
-                        label={marker}
-                        size="small"
-                        variant="outlined"
-                      />
-                    ))}
-                    {profile.biomarkers.length > 2 ? (
-                      <Tooltip title={profile.biomarkers.join(", ")}>
-                        <Chip
-                          label={`+${profile.biomarkers.length - 2}`}
-                          size="small"
-                          variant="outlined"
-                        />
-                      </Tooltip>
-                    ) : null}
-                  </Box>
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2" color="text.secondary">
-                    {profile.inclusionSummary}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Exclusions: {profile.exclusionSummary}
-                  </Typography>
-                </TableCell>
-                <TableCell>{profile.detailLevel}</TableCell>
-                <TableCell>{profile.percentExcluded}</TableCell>
-                <TableCell>{profile.confidenceLevel}</TableCell>
-                <TableCell>
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
-                    <Chip
-                      label={profile.source}
-                      size="small"
-                      variant="outlined"
-                    />
-                    {profile.recommendedReason ? (
-                      <Tooltip title={profile.recommendedReason}>
-                        <Chip
-                          label="Why recommended"
-                          size="small"
-                          color="info"
-                          variant="outlined"
-                        />
-                      </Tooltip>
-                    ) : null}
-                  </Box>
-                </TableCell>
-                <TableCell>{profile.status}</TableCell>
-                <TableCell align="right">
-                  <Button
-                    size="small"
-                    onClick={(event) => handleRowActionOpen(event, profile.id)}
+            {profiles.map((profile) => {
+              const isExpanded = expandedId === profile.id;
+              return (
+                <Fragment key={profile.id}>
+                  <TableRow
+                    hover
+                    selected={selectedIds.includes(profile.id)}
+                    onClick={() => handleRowExpand(profile.id)}
+                    sx={{ cursor: "pointer" }}
                   >
-                    <MoreVert />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+                    <TableCell>
+                      <Typography variant="subtitle2">{profile.name}</Typography>
+                    </TableCell>
+                    <TableCell>{profile.indication}</TableCell>
+                    <TableCell>{profile.totalPatients}</TableCell>
+                    <TableCell>{profile.patientsPerCriteria}</TableCell>
+                    <TableCell>{profile.sampleSize}</TableCell>
+                    <TableCell>{profile.benchmarkStudies.length}</TableCell>
+                    <TableCell>{profile.source}</TableCell>
+                    <TableCell>{profile.addedBy}</TableCell>
+                    <TableCell>{profile.modifiedBy}</TableCell>
+                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                        <Checkbox
+                          size="small"
+                          checked={selectedIds.includes(profile.id)}
+                          onChange={() => handleSelectRow(profile.id)}
+                        />
+                        <Tooltip title="Profile actions">
+                          <IconButton
+                            size="small"
+                            onClick={(event) => handleActionOpen(event, profile.id)}
+                          >
+                            <MoreVert fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell colSpan={10} sx={{ p: 0, borderBottom: 0 }}>
+                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                        {/* Row expansion is scoped to a single profile to avoid turning this page into a global dashboard. */}
+                        <Box sx={{ p: 2, backgroundColor: "rgba(0, 0, 0, 0.02)" }}>
+                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                            Criteria timeline (row-scoped)
+                          </Typography>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Criterion</TableCell>
+                                <TableCell>Value</TableCell>
+                                <TableCell>Avg. Time to First Patient</TableCell>
+                                <TableCell>Avg. Time to 25% Patients</TableCell>
+                                <TableCell>Avg. Time to 75% Patients</TableCell>
+                                <TableCell>Avg. Time to Last Patient</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {profile.criteriaTimeline.map((row) => (
+                                <TableRow key={row.criterion}>
+                                  <TableCell>{row.criterion}</TableCell>
+                                  <TableCell>{row.value}</TableCell>
+                                  <TableCell>{row.ttfp}</TableCell>
+                                  <TableCell>{row.t25}</TableCell>
+                                  <TableCell>{row.t75}</TableCell>
+                                  <TableCell>{row.tLast}</TableCell>
+                                </TableRow>
+                              ))}
+                              {profile.criteriaTimeline.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={6}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      No criteria timeline captured yet.
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                              ) : null}
+                            </TableBody>
+                          </Table>
+
+                          <Divider sx={{ my: 2 }} />
+
+                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                            Profile KPIs
+                          </Typography>
+                          <Grid container spacing={2}>
+                            {profile.kpis.map((kpi) => (
+                              <Grid item xs={12} sm={6} md={3} key={kpi.label}>
+                                <Card variant="outlined" sx={{ height: "100%" }}>
+                                  <CardContent>
+                                    <Typography variant="overline" color="text.secondary">
+                                      {kpi.label}
+                                    </Typography>
+                                    <Typography variant="h6" sx={{ mt: 0.5 }}>
+                                      {kpi.value}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      Source: {kpi.source}
+                                    </Typography>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            ))}
+                            {profile.kpis.length === 0 ? (
+                              <Grid item xs={12}>
+                                <Typography variant="body2" color="text.secondary">
+                                  KPIs will appear here as evidence is linked.
+                                </Typography>
+                              </Grid>
+                            ) : null}
+                          </Grid>
+
+                          <Divider sx={{ my: 2 }} />
+
+                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                            Reference studies
+                          </Typography>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Reference Study</TableCell>
+                                <TableCell>Study Type</TableCell>
+                                <TableCell>Population Similarity</TableCell>
+                                <TableCell>Key Outcome Summary</TableCell>
+                                <TableCell>Actions</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {profile.referenceStudies.map((study) => (
+                                <TableRow key={study.name}>
+                                  <TableCell>{study.name}</TableCell>
+                                  <TableCell>{study.type}</TableCell>
+                                  <TableCell>{study.similarity}</TableCell>
+                                  <TableCell>{study.outcome}</TableCell>
+                                  <TableCell>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => setComparisonOpen(true)}
+                                    >
+                                      Compare
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {profile.referenceStudies.length === 0 ? (
+                                <TableRow>
+                                  <TableCell colSpan={5}>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Link benchmark studies to support this profile.
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
+                              ) : null}
+                            </TableBody>
+                          </Table>
+                        </Box>
+                      </Collapse>
+                    </TableCell>
+                  </TableRow>
+                </Fragment>
+              );
+            })}
           </TableBody>
         </Table>
-        <TablePagination
-          component="div"
-          rowsPerPageOptions={[5, 10, 25]}
-          count={sortedProfiles.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={(_, nextPage) => setPage(nextPage)}
-          onRowsPerPageChange={(event) => {
-            setRowsPerPage(parseInt(event.target.value, 10));
-            setPage(0);
-          }}
-        />
       </TableContainer>
 
       <Menu
         anchorEl={actionAnchor}
         open={Boolean(actionAnchor)}
-        onClose={handleRowActionClose}
+        onClose={handleActionClose}
       >
-        <MenuItem onClick={() => handleAction("edit")}>Edit</MenuItem>
-        <MenuItem onClick={() => handleAction("duplicate")}>Duplicate</MenuItem>
-        <MenuItem onClick={() => handleAction("variant")}>
-          Create variant
+        <MenuItem onClick={() => handleRowAction("edit")}>Edit profile</MenuItem>
+        <MenuItem onClick={() => handleRowAction("duplicate")}>
+          Duplicate profile
         </MenuItem>
+        <MenuItem onClick={() => handleRowAction("delete")}>Delete profile</MenuItem>
         <Divider />
-        <MenuItem onClick={() => handleAction("archive")}>Archive</MenuItem>
+        <MenuItem onClick={() => handleRowAction("compare")}>
+          Open comparison view
+        </MenuItem>
       </Menu>
 
-      <Dialog open={dialogOpen} onClose={handleDialogClose} fullWidth maxWidth="sm">
-        <DialogTitle>
-          {dialogMode === "edit"
-            ? "Edit Patient Profile"
-            : dialogMode === "variant"
-            ? "Create Variant"
-            : "New Patient Profile"}
-        </DialogTitle>
-        <DialogContent dividers>
-          <Box sx={{ display: "grid", gap: 2, mt: 1 }}>
-            <TextField
-              label="Profile name"
-              value={draftProfile.name}
-              onChange={(event) =>
-                setDraftProfile((prev) => ({
-                  ...prev,
-                  name: event.target.value,
-                }))
-              }
-            />
-            <TextField
-              label="Disease / indication"
-              value={draftProfile.disease}
-              onChange={(event) =>
-                setDraftProfile((prev) => ({
-                  ...prev,
-                  disease: event.target.value,
-                }))
-              }
-            />
-            <TextField
-              label="Line of therapy"
-              value={draftProfile.lineOfTherapy}
-              onChange={(event) =>
-                setDraftProfile((prev) => ({
-                  ...prev,
-                  lineOfTherapy: event.target.value,
-                }))
-              }
-            />
-            <FormControl>
-              <InputLabel>Biomarkers</InputLabel>
-              <Select
-                multiple
-                value={draftProfile.biomarkers}
-                onChange={(event) =>
-                  setDraftProfile((prev) => ({
-                    ...prev,
-                    biomarkers: event.target.value,
-                  }))
-                }
-                input={<OutlinedInput label="Biomarkers" />}
-                renderValue={(selected) => selected.join(", ")}
-              >
-                {biomarkersCatalog.map((marker) => (
-                  <MenuItem key={marker} value={marker}>
-                    {marker}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              label="Inclusion criteria"
-              value={draftProfile.inclusionSummary}
-              onChange={(event) =>
-                setDraftProfile((prev) => ({
-                  ...prev,
-                  inclusionSummary: event.target.value,
-                }))
-              }
-              multiline
-              minRows={3}
-            />
-            <TextField
-              label="Exclusion criteria"
-              value={draftProfile.exclusionSummary}
-              onChange={(event) =>
-                setDraftProfile((prev) => ({
-                  ...prev,
-                  exclusionSummary: event.target.value,
-                }))
-              }
-              multiline
-              minRows={3}
-            />
-            <FormControl>
-              <InputLabel>Detail level</InputLabel>
-              <Select
-                value={draftProfile.detailLevel}
-                label="Detail level"
-                onChange={(event) =>
-                  setDraftProfile((prev) => ({
-                    ...prev,
-                    detailLevel: event.target.value,
-                  }))
-                }
-              >
-                {sortableColumns.detailLevel.map((level) => (
-                  <MenuItem key={level} value={level}>
-                    {level}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+      <Drawer
+        anchor="right"
+        open={drawerOpen}
+        onClose={requestCloseDrawer}
+        PaperProps={{ sx: { width: { xs: "100%", sm: 420, md: "38vw" } } }}
+      >
+        {/* Drawer keeps the main table visible, preserving context better than a modal. */}
+        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <Box
+            sx={{
+              p: 2,
+              borderBottom: "1px solid rgba(0, 0, 0, 0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+            }}
+          >
+            <Box>
+              <Typography variant="h6">
+                {drawerMode === "edit" ? "Edit Patient Profile" : "New Patient Profile"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Build or refine a single profile without leaving the table.
+              </Typography>
+            </Box>
+            <IconButton onClick={requestCloseDrawer}>
+              <Close />
+            </IconButton>
           </Box>
-          {dialogMode === "variant" && draftProfile.parentId ? (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 2, display: "block" }}
-            >
-              Variant derived from {draftProfile.parentId}
+
+          <Box sx={{ p: 2, overflowY: "auto", flex: 1 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              1) Profile metadata
             </Typography>
-          ) : null}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12}>
+                <TextField
+                  required
+                  label="Name"
+                  value={draftProfile.name}
+                  onChange={(event) => handleDraftChange("name", event.target.value)}
+                  error={!draftProfile.name.trim()}
+                  helperText={!draftProfile.name.trim() ? "Name is required." : ""}
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  required
+                  label="Indication"
+                  value={draftProfile.indication}
+                  onChange={(event) =>
+                    handleDraftChange("indication", event.target.value)
+                  }
+                  error={!draftProfile.indication.trim()}
+                  helperText={!draftProfile.indication.trim() ? "Indication is required." : ""}
+                  fullWidth
+                />
+              </Grid>
+            </Grid>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              2) Benchmark studies
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+              <TextField
+                label="Add benchmark study"
+                value={newBenchmark}
+                onChange={(event) => setNewBenchmark(event.target.value)}
+                fullWidth
+              />
+              <IconButton color="primary" onClick={handleAddBenchmark}>
+                <Add />
+              </IconButton>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 3 }}>
+              {(draftProfile.benchmarkStudies || []).map((study) => (
+                <Chip
+                  key={study}
+                  label={study}
+                  onDelete={() => handleRemoveBenchmark(study)}
+                  deleteIcon={<DeleteOutline />}
+                />
+              ))}
+              {draftProfile.benchmarkStudies.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Add the benchmark studies used to ground this profile.
+                </Typography>
+              ) : null}
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              3) Inclusion / exclusion criteria
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center", mb: 1 }}>
+              <Typography variant="caption" color="text.secondary">
+                Use free text for each criterion. Lists remain row-scoped.
+              </Typography>
+              <Button size="small" variant="outlined" onClick={handleOpenSuggest}>
+                Suggest Criteria
+              </Button>
+            </Box>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Inclusion criteria
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+                  <TextField
+                    label="Add inclusion criterion"
+                    value={newInclusion}
+                    onChange={(event) => setNewInclusion(event.target.value)}
+                    fullWidth
+                  />
+                  <IconButton color="primary" onClick={() => handleAddCriterion("inclusion")}>
+                    <Add />
+                  </IconButton>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    maxHeight: 140,
+                    overflowY: "auto",
+                    mb: 2,
+                  }}
+                >
+                  {(draftProfile.inclusionCriteria || []).map((item) => (
+                    <Chip
+                      key={item}
+                      label={item}
+                      onDelete={() => handleRemoveCriterion("inclusion", item)}
+                      deleteIcon={<DeleteOutline />}
+                    />
+                  ))}
+                  {draftProfile.inclusionCriteria.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No inclusion criteria added yet.
+                    </Typography>
+                  ) : null}
+                </Box>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Exclusion criteria
+                </Typography>
+                <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+                  <TextField
+                    label="Add exclusion criterion"
+                    value={newExclusion}
+                    onChange={(event) => setNewExclusion(event.target.value)}
+                    fullWidth
+                  />
+                  <IconButton color="primary" onClick={() => handleAddCriterion("exclusion")}>
+                    <Add />
+                  </IconButton>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    maxHeight: 140,
+                    overflowY: "auto",
+                  }}
+                >
+                  {(draftProfile.exclusionCriteria || []).map((item) => (
+                    <Chip
+                      key={item}
+                      label={item}
+                      onDelete={() => handleRemoveCriterion("exclusion", item)}
+                      deleteIcon={<DeleteOutline />}
+                    />
+                  ))}
+                  {draftProfile.exclusionCriteria.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No exclusion criteria added yet.
+                    </Typography>
+                  ) : null}
+                </Box>
+              </Grid>
+            </Grid>
+          </Box>
+
+          <Box
+            sx={{
+              p: 2,
+              borderTop: "1px solid rgba(0, 0, 0, 0.12)",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 1,
+              justifyContent: "space-between",
+            }}
+          >
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                hidden
+                onChange={handleImportFile}
+                accept=".pdf,.doc,.docx"
+              />
+              <Button variant="outlined" startIcon={<UploadFile />} onClick={handleImportClick}>
+                Import from document
+              </Button>
+            </Box>
+            <Box sx={{ display: "flex", gap: 1, ml: "auto" }}>
+              <Button variant="text" onClick={requestCloseDrawer}>
+                Cancel
+              </Button>
+              <Tooltip title={isSaveDisabled ? "Name and indication are required." : ""}>
+                <span>
+                  <Button variant="contained" onClick={handleSaveProfile} disabled={isSaveDisabled}>
+                    Save Profile
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          </Box>
+        </Box>
+      </Drawer>
+
+      <Dialog
+        open={discardConfirmOpen}
+        onClose={() => setDiscardConfirmOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Discard changes?</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2">
+            You have unsaved changes in this profile. Discard and close the drawer?
+          </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDialogClose}>Cancel</Button>
-          <Button variant="contained" onClick={handleDialogSave}>
-            Save Profile
+          <Button onClick={() => setDiscardConfirmOpen(false)}>Keep editing</Button>
+          <Button variant="contained" color="error" onClick={handleDiscardChanges}>
+            Discard
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Drawer
-        anchor="right"
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
+      <Dialog
+        open={suggestOpen}
+        onClose={() => setSuggestOpen(false)}
+        fullWidth
+        maxWidth="sm"
       >
-        <Box sx={{ width: 360, p: 3 }}>
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            Compare profiles
+        <DialogTitle>Suggest criteria</DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid item xs={12}>
+              <TextField
+                label="Study Title"
+                value={suggestForm.studyTitle}
+                onChange={(event) =>
+                  setSuggestForm((prev) => ({ ...prev, studyTitle: event.target.value }))
+                }
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Indication"
+                value={suggestForm.indication}
+                onChange={(event) =>
+                  setSuggestForm((prev) => ({ ...prev, indication: event.target.value }))
+                }
+                fullWidth
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <TextField
+                label="Description"
+                value={suggestForm.description}
+                onChange={(event) =>
+                  setSuggestForm((prev) => ({ ...prev, description: event.target.value }))
+                }
+                fullWidth
+                multiline
+                minRows={3}
+              />
+            </Grid>
+          </Grid>
+          <Button variant="outlined" onClick={handleGenerateSuggestions}>
+            Generate
+          </Button>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Inclusion suggestions
+            </Typography>
+            {suggestions.inclusion.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No suggestions yet.
+              </Typography>
+            ) : (
+              suggestions.inclusion.map((item) => (
+                <Box key={item} sx={{ display: "flex", gap: 1, mb: 1 }}>
+                  <Typography variant="body2" sx={{ flex: 1 }}>
+                    {item}
+                  </Typography>
+                  <Button size="small" onClick={() => handleAcceptSuggestion("inclusion", item)}>
+                    Accept
+                  </Button>
+                  <Button
+                    size="small"
+                    color="inherit"
+                    onClick={() => handleRejectSuggestion("inclusion", item)}
+                  >
+                    Reject
+                  </Button>
+                </Box>
+              ))
+            )}
+          </Box>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Exclusion suggestions
+            </Typography>
+            {suggestions.exclusion.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No suggestions yet.
+              </Typography>
+            ) : (
+              suggestions.exclusion.map((item) => (
+                <Box key={item} sx={{ display: "flex", gap: 1, mb: 1 }}>
+                  <Typography variant="body2" sx={{ flex: 1 }}>
+                    {item}
+                  </Typography>
+                  <Button size="small" onClick={() => handleAcceptSuggestion("exclusion", item)}>
+                    Accept
+                  </Button>
+                  <Button
+                    size="small"
+                    color="inherit"
+                    onClick={() => handleRejectSuggestion("exclusion", item)}
+                  >
+                    Reject
+                  </Button>
+                </Box>
+              ))
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSuggestOpen(false)}>Cancel</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete patient profile</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2">
+            This action removes the selected profile(s). Confirm to continue.
           </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirmOpen(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteProfiles}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={comparisonOpen}
+        onClose={() => setComparisonOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Comparison view (placeholder)</DialogTitle>
+        <DialogContent dividers>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Read-only comparison of selected profile options.
+            A dedicated comparison view will be rendered here when invoked.
           </Typography>
           {selectedProfiles.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              Select profiles to compare.
+              Select a profile or reference study to compare.
             </Typography>
           ) : (
             selectedProfiles.map((profile) => (
-              <Paper
-                key={profile.id}
-                variant="outlined"
-                sx={{ p: 2, mb: 2 }}
-              >
+              <Paper key={profile.id} variant="outlined" sx={{ p: 2, mb: 2 }}>
                 <Typography variant="subtitle2">{profile.name}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {profile.disease} · {profile.lineOfTherapy}
+                  {profile.indication}
                 </Typography>
                 <Divider sx={{ my: 1 }} />
-                <Typography variant="body2">{profile.inclusionSummary}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Exclusions: {profile.exclusionSummary}
+                <Typography variant="body2">
+                  Sample size: {profile.sampleSize}
                 </Typography>
-                <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", mt: 1 }}>
-                  {profile.biomarkers.map((marker) => (
-                    <Chip key={marker} label={marker} size="small" />
-                  ))}
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Typography variant="caption" color="text.secondary">
-                  Creation: {profile.creationMethod}
+                <Typography variant="body2" color="text.secondary">
+                  Benchmark studies: {profile.benchmarkStudies.length}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                  Parent: {profile.parentId || "None"}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                  Last modified: {profile.lastModified}
-                </Typography>
-                {profile.recommendedReason ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
-                    Reason: {profile.recommendedReason}
-                  </Typography>
-                ) : null}
               </Paper>
             ))
           )}
-        </Box>
-      </Drawer>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setComparisonOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
