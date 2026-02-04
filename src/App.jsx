@@ -308,12 +308,8 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         label: "Site Recommendation",
         path: `${basePath}/site-recommendation`,
         status: steps.siteRecommendation,
-        enabled:
-          approvedPatientProfiles.length > 0 &&
-          approvedSiteProfiles.length > 0 &&
-          approvedCountries.length > 0,
-        disabledReason:
-          "Approve patient, site, and country selections before recommending sites.",
+        enabled: true,
+        disabledReason: "",
       },
       {
         label: "Review & Approval",
