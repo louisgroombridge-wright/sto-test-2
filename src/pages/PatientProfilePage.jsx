@@ -21,6 +21,9 @@ import {
   MenuItem,
   OutlinedInput,
   Select,
+  Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -42,7 +45,7 @@ import {
   Remove,
   UploadFile,
 } from "@mui/icons-material";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
 const biomarkersCatalog = [
   "EGFR",
@@ -239,10 +242,17 @@ const placeholderSuggestions = {
   ],
 };
 
-const PatientProfilePage = () => {
+const PatientProfilePage = ({
+  approvedProfiles = {},
+  reviewComments = {},
+  onApproveProfile = () => {},
+  onRemoveApproval = () => {},
+  onUpdateReviewComment = () => {},
+}) => {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [expandedId, setExpandedId] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [activeTab, setActiveTab] = useState(0);
   const [actionAnchor, setActionAnchor] = useState(null);
   const [actionProfileId, setActionProfileId] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -256,6 +266,9 @@ const PatientProfilePage = () => {
   const [newInclusion, setNewInclusion] = useState("");
   const [newExclusion, setNewExclusion] = useState("");
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [approveTarget, setApproveTarget] = useState(null);
+  const [approveCommentDraft, setApproveCommentDraft] = useState("");
   const [suggestForm, setSuggestForm] = useState({
     studyTitle: "",
     indication: "",
@@ -265,10 +278,23 @@ const PatientProfilePage = () => {
   const fileInputRef = useRef(null);
   const initialDraftRef = useRef(emptyDraft);
 
+  const approvedIds = useMemo(
+    () => Object.keys(approvedProfiles),
+    [approvedProfiles]
+  );
+
   const selectedProfiles = useMemo(
     () => profiles.filter((profile) => selectedIds.includes(profile.id)),
     [profiles, selectedIds]
   );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      approvedIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }, [approvedIds]);
 
   const isSaveDisabled = !draftProfile.name.trim() || !draftProfile.indication.trim();
 
@@ -358,12 +384,16 @@ const PatientProfilePage = () => {
 
   const handleRowAction = (action) => {
     const profile = profiles.find((item) => item.id === actionProfileId);
+    const isApproved = profile ? approvedIds.includes(profile.id) : false;
     handleActionClose();
     if (!profile) {
       return;
     }
 
     if (action === "edit") {
+      if (isApproved) {
+        return;
+      }
       openDrawer("edit", profile);
     }
 
@@ -390,10 +420,38 @@ const PatientProfilePage = () => {
   };
 
   const handleDeleteProfiles = () => {
+    if (selectedIds.some((id) => approvedIds.includes(id))) {
+      return;
+    }
     setProfiles((prev) => prev.filter((profile) => !selectedIds.includes(profile.id)));
     setSelectedIds([]);
     setDeleteConfirmOpen(false);
   };
+
+  const handleRequestApprove = (profile) => {
+    setApproveTarget(profile);
+    setApproveCommentDraft(reviewComments[profile.id] || "");
+    setApproveDialogOpen(true);
+  };
+
+  const handleConfirmApprove = () => {
+    if (!approveTarget) {
+      return;
+    }
+    onApproveProfile(approveTarget.id, approveCommentDraft);
+    setApproveDialogOpen(false);
+    setApproveTarget(null);
+    setApproveCommentDraft("");
+  };
+
+  const handleRemoveFromReview = (profileId) => {
+    setSelectedIds((prev) => prev.filter((id) => id !== profileId));
+  };
+
+  const isProfileComplete = (profile) =>
+    profile.name.trim() &&
+    profile.indication.trim() &&
+    (profile.inclusionCriteria?.length || 0) > 0;
 
   const handleDraftChange = (field, value) => {
     setDrawerTouched(true);
@@ -516,7 +574,10 @@ const PatientProfilePage = () => {
           </Button>
           <Button
             variant="outlined"
-            disabled={selectedIds.length === 0}
+            disabled={
+              selectedIds.length === 0 ||
+              selectedIds.some((id) => approvedIds.includes(id))
+            }
             onClick={() => setDeleteConfirmOpen(true)}
           >
             Delete Patient Profile
@@ -524,215 +585,422 @@ const PatientProfilePage = () => {
         </Box>
       </Box>
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Indication</TableCell>
-              <TableCell>Total Patients</TableCell>
-              <TableCell>No. Patients / Criteria</TableCell>
-              <TableCell>Sample Size</TableCell>
-              <TableCell>No. Benchmark Studies</TableCell>
-              <TableCell>Source</TableCell>
-              <TableCell>Added By</TableCell>
-              <TableCell>Modified By</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {profiles.map((profile) => {
-              const isExpanded = expandedId === profile.id;
-              return (
-                <Fragment key={profile.id}>
-                  <TableRow
-                    hover
-                    selected={selectedIds.includes(profile.id)}
-                    onClick={() => handleRowExpand(profile.id)}
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <TableCell>
-                      <Typography variant="subtitle2">{profile.name}</Typography>
-                    </TableCell>
-                    <TableCell>{profile.indication}</TableCell>
-                    <TableCell>{profile.totalPatients}</TableCell>
-                    <TableCell>{profile.patientsPerCriteria}</TableCell>
-                    <TableCell>{profile.sampleSize}</TableCell>
-                    <TableCell>{profile.benchmarkStudies.length}</TableCell>
-                    <TableCell>{profile.source}</TableCell>
-                    <TableCell>{profile.addedBy}</TableCell>
-                    <TableCell>{profile.modifiedBy}</TableCell>
-                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
-                      <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                        <Checkbox
-                          size="small"
-                          checked={selectedIds.includes(profile.id)}
-                          onChange={() => handleSelectRow(profile.id)}
-                        />
-                        <Tooltip title="Profile actions">
-                          <IconButton
-                            size="small"
-                            onClick={(event) => handleActionOpen(event, profile.id)}
-                          >
-                            <MoreVert fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell colSpan={10} sx={{ p: 0, borderBottom: 0 }}>
-                      <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-                        {/* Row expansion is scoped to a single profile to avoid turning this page into a global dashboard. */}
-                        <Box sx={{ p: 2, backgroundColor: "rgba(0, 0, 0, 0.02)" }}>
-                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                            Criteria impact (row-scoped)
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                            Impacts shown are directional estimates relative to the baseline patient profile.
-                          </Typography>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Criterion</TableCell>
-                                <TableCell>Value</TableCell>
-                                <TableCell>Impact on Patients / Month (%)</TableCell>
-                                <TableCell>Direction</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {profile.criteriaTimeline.map((row) => (
-                                <TableRow key={row.criterion}>
-                                  <TableCell>{row.criterion}</TableCell>
-                                  <TableCell>{row.value}</TableCell>
-                                  <TableCell>
-                                    {row.impactPercent > 0
-                                      ? `+${row.impactPercent}%`
-                                      : row.impactPercent < 0
-                                      ? `${row.impactPercent}%`
-                                      : "0%"}
-                                  </TableCell>
-                                  <TableCell>
-                                    {/* Impacts are directional only; icons avoid implying precision or ranking. */}
-                                    {row.direction === "up" ? (
-                                      <Icon fontSize="small" component={ArrowUpward} />
-                                    ) : row.direction === "down" ? (
-                                      <Icon fontSize="small" component={ArrowDownward} />
-                                    ) : (
-                                      <Icon fontSize="small" component={Remove} />
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                              {profile.criteriaTimeline.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={4}>
-                                    <Typography variant="body2" color="text.secondary">
-                                      No criteria impact estimates captured yet.
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              ) : null}
-                            </TableBody>
-                          </Table>
+      <Tabs
+        value={activeTab}
+        onChange={(_, value) => setActiveTab(value)}
+        sx={{ mb: 2 }}
+      >
+        <Tab label="Workspace" />
+        <Tab label="Review & Approval" />
+      </Tabs>
 
-                          <Divider sx={{ my: 2 }} />
-
-                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                            Profile KPIs
-                          </Typography>
-                          <Grid container spacing={2}>
-                            {profile.kpis.map((kpi) => (
-                              <Grid item xs={12} sm={6} md={3} key={kpi.label}>
-                                <Card variant="outlined" sx={{ height: "100%" }}>
-                                  <CardContent>
-                                    <Typography variant="overline" color="text.secondary">
-                                      {kpi.label}
-                                    </Typography>
-                                    <Typography variant="h6" sx={{ mt: 0.5 }}>
-                                      {kpi.value}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      Source: {kpi.source}
-                                    </Typography>
-                                  </CardContent>
-                                </Card>
-                              </Grid>
-                            ))}
-                            {profile.kpis.length === 0 ? (
-                              <Grid item xs={12}>
-                                <Typography variant="body2" color="text.secondary">
-                                  KPIs will appear here as evidence is linked.
-                                </Typography>
-                              </Grid>
-                            ) : null}
-                          </Grid>
-
-                          <Divider sx={{ my: 2 }} />
-
-                          <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                            Reference studies
-                          </Typography>
-                          <Table size="small">
-                            <TableHead>
-                              <TableRow>
-                                <TableCell>Reference Study</TableCell>
-                                <TableCell>Study Type</TableCell>
-                                <TableCell>Population Similarity</TableCell>
-                                <TableCell>Key Outcome Summary</TableCell>
-                                <TableCell>Actions</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {profile.referenceStudies.map((study) => (
-                                <TableRow key={study.name}>
-                                  <TableCell>{study.name}</TableCell>
-                                  <TableCell>{study.type}</TableCell>
-                                  <TableCell>{study.similarity}</TableCell>
-                                  <TableCell>{study.outcome}</TableCell>
-                                  <TableCell>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      onClick={() => setComparisonOpen(true)}
-                                    >
-                                      Compare
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                              {profile.referenceStudies.length === 0 ? (
-                                <TableRow>
-                                  <TableCell colSpan={5}>
-                                    <Typography variant="body2" color="text.secondary">
-                                      Link benchmark studies to support this profile.
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              ) : null}
-                            </TableBody>
-                          </Table>
+      {activeTab === 0 ? (
+        <TableContainer component={Paper} variant="outlined">
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Name</TableCell>
+                <TableCell>Indication</TableCell>
+                <TableCell>Total Patients</TableCell>
+                <TableCell>No. Patients / Criteria</TableCell>
+                <TableCell>Sample Size</TableCell>
+                <TableCell>No. Benchmark Studies</TableCell>
+                <TableCell>Source</TableCell>
+                <TableCell>Added By</TableCell>
+                <TableCell>Modified By</TableCell>
+                <TableCell align="right">Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {profiles.map((profile) => {
+                const isExpanded = expandedId === profile.id;
+                const isApproved = approvedIds.includes(profile.id);
+                return (
+                  <Fragment key={profile.id}>
+                    <TableRow
+                      hover
+                      selected={selectedIds.includes(profile.id)}
+                      onClick={() => handleRowExpand(profile.id)}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography variant="subtitle2">{profile.name}</Typography>
+                          {isApproved ? (
+                            <Chip size="small" label="Approved" color="success" />
+                          ) : (
+                            <Chip size="small" label="Draft" variant="outlined" />
+                          )}
                         </Box>
-                      </Collapse>
+                      </TableCell>
+                      <TableCell>{profile.indication}</TableCell>
+                      <TableCell>{profile.totalPatients}</TableCell>
+                      <TableCell>{profile.patientsPerCriteria}</TableCell>
+                      <TableCell>{profile.sampleSize}</TableCell>
+                      <TableCell>{profile.benchmarkStudies.length}</TableCell>
+                      <TableCell>{profile.source}</TableCell>
+                      <TableCell>{profile.addedBy}</TableCell>
+                      <TableCell>{profile.modifiedBy}</TableCell>
+                      <TableCell align="right" onClick={(event) => event.stopPropagation()}>
+                        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
+                          <Tooltip
+                            title={
+                              isApproved
+                                ? "Approved profiles stay locked to preserve governance."
+                                : "Add to review"
+                            }
+                          >
+                            <span>
+                              <Checkbox
+                                size="small"
+                                checked={selectedIds.includes(profile.id)}
+                                onChange={() => handleSelectRow(profile.id)}
+                                disabled={isApproved}
+                              />
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Profile actions">
+                            <IconButton
+                              size="small"
+                              onClick={(event) => handleActionOpen(event, profile.id)}
+                            >
+                              <MoreVert fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell colSpan={10} sx={{ p: 0, borderBottom: 0 }}>
+                        <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                          {/* Row expansion is scoped to a single profile to avoid turning this page into a global dashboard. */}
+                          <Box sx={{ p: 2, backgroundColor: "rgba(0, 0, 0, 0.02)" }}>
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                              Criteria impact (row-scoped)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                              Impacts shown are directional estimates relative to the baseline patient profile.
+                            </Typography>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Criterion</TableCell>
+                                  <TableCell>Value</TableCell>
+                                  <TableCell>Impact on Patients / Month (%)</TableCell>
+                                  <TableCell>Direction</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {profile.criteriaTimeline.map((row) => (
+                                  <TableRow key={row.criterion}>
+                                    <TableCell>{row.criterion}</TableCell>
+                                    <TableCell>{row.value}</TableCell>
+                                    <TableCell>
+                                      {row.impactPercent > 0
+                                        ? `+${row.impactPercent}%`
+                                        : row.impactPercent < 0
+                                        ? `${row.impactPercent}%`
+                                        : "0%"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {/* Impacts are directional only; icons avoid implying precision or ranking. */}
+                                      {row.direction === "up" ? (
+                                        <Icon fontSize="small" component={ArrowUpward} />
+                                      ) : row.direction === "down" ? (
+                                        <Icon fontSize="small" component={ArrowDownward} />
+                                      ) : (
+                                        <Icon fontSize="small" component={Remove} />
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                {profile.criteriaTimeline.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={4}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        No criteria impact estimates captured yet.
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : null}
+                              </TableBody>
+                            </Table>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                              Profile KPIs
+                            </Typography>
+                            <Grid container spacing={2}>
+                              {profile.kpis.map((kpi) => (
+                                <Grid item xs={12} sm={6} md={3} key={kpi.label}>
+                                  <Card variant="outlined" sx={{ height: "100%" }}>
+                                    <CardContent>
+                                      <Typography variant="overline" color="text.secondary">
+                                        {kpi.label}
+                                      </Typography>
+                                      <Typography variant="h6" sx={{ mt: 0.5 }}>
+                                        {kpi.value}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Source: {kpi.source}
+                                      </Typography>
+                                    </CardContent>
+                                  </Card>
+                                </Grid>
+                              ))}
+                              {profile.kpis.length === 0 ? (
+                                <Grid item xs={12}>
+                                  <Typography variant="body2" color="text.secondary">
+                                    KPIs will appear here as evidence is linked.
+                                  </Typography>
+                                </Grid>
+                              ) : null}
+                            </Grid>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                              Reference studies
+                            </Typography>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Reference Study</TableCell>
+                                  <TableCell>Study Type</TableCell>
+                                  <TableCell>Population Similarity</TableCell>
+                                  <TableCell>Key Outcome Summary</TableCell>
+                                  <TableCell>Actions</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {profile.referenceStudies.map((study) => (
+                                  <TableRow key={study.name}>
+                                    <TableCell>{study.name}</TableCell>
+                                    <TableCell>{study.type}</TableCell>
+                                    <TableCell>{study.similarity}</TableCell>
+                                    <TableCell>{study.outcome}</TableCell>
+                                    <TableCell>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => setComparisonOpen(true)}
+                                      >
+                                        Compare
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                {profile.referenceStudies.length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={5}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        Link benchmark studies to support this profile.
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                ) : null}
+                              </TableBody>
+                            </Table>
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      ) : (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          {/* Governance intent: review is read-only, approvals are explicit and traceable. */}
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="subtitle1">Review & Approval</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Approve patient profiles deliberately before they can feed country and
+                site feasibility steps.
+              </Typography>
+            </Box>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Profile</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Inclusion / Exclusion Summary</TableCell>
+                  <TableCell>Criteria Impact</TableCell>
+                  <TableCell>Benchmark Studies</TableCell>
+                  <TableCell>Notes</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {selectedProfiles.map((profile) => {
+                  const isApproved = approvedIds.includes(profile.id);
+                  const missingRequired = !isProfileComplete(profile);
+                  return (
+                    <TableRow key={profile.id} hover>
+                      <TableCell>
+                        <Typography variant="subtitle2">{profile.name}</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {profile.indication}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={isApproved ? "Approved" : "Draft"}
+                          color={isApproved ? "success" : "default"}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          Inclusion: {profile.inclusionCriteria.length}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Exclusion: {profile.exclusionCriteria.length}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Criterion</TableCell>
+                              <TableCell>Impact</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {profile.criteriaTimeline.slice(0, 3).map((row) => (
+                              <TableRow key={row.criterion}>
+                                <TableCell>{row.criterion}</TableCell>
+                                <TableCell>
+                                  {row.impactPercent > 0
+                                    ? `+${row.impactPercent}%`
+                                    : row.impactPercent < 0
+                                    ? `${row.impactPercent}%`
+                                    : "0%"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {profile.criteriaTimeline.length === 0 ? (
+                              <TableRow>
+                                <TableCell colSpan={2}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    No impact table captured.
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ) : null}
+                          </TableBody>
+                        </Table>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {profile.benchmarkStudies.length} studies
+                        </Typography>
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 180 }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          placeholder="Add comment"
+                          value={reviewComments[profile.id] || ""}
+                          onChange={(event) =>
+                            onUpdateReviewComment(profile.id, event.target.value)
+                          }
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Tooltip
+                            title={
+                              missingRequired
+                                ? "Complete name, indication, and inclusion criteria."
+                                : isApproved
+                                ? "Approved profiles are locked."
+                                : ""
+                            }
+                          >
+                            <span>
+                              <Button
+                                variant="contained"
+                                size="small"
+                                onClick={() => handleRequestApprove(profile)}
+                                disabled={missingRequired || isApproved}
+                              >
+                                Approve
+                              </Button>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={isApproved ? "Approved profiles are locked." : ""}>
+                            <span>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => handleRemoveFromReview(profile.id)}
+                                disabled={isApproved}
+                              >
+                                Remove
+                              </Button>
+                            </span>
+                          </Tooltip>
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() =>
+                              openDrawer("duplicate", {
+                                ...profile,
+                                id: "",
+                                name: `${profile.name} (Copy)`,
+                                source: "Manual",
+                                addedBy: "You",
+                                modifiedBy: "You",
+                              })
+                            }
+                          >
+                            Duplicate for edits
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {selectedProfiles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7}>
+                      <Typography variant="body2" color="text.secondary">
+                        Select patient profiles in the workspace to queue them for review.
+                      </Typography>
                     </TableCell>
                   </TableRow>
-                </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                ) : null}
+              </TableBody>
+            </Table>
+          </Stack>
+        </Paper>
+      )}
 
       <Menu
         anchorEl={actionAnchor}
         open={Boolean(actionAnchor)}
         onClose={handleActionClose}
       >
-        <MenuItem onClick={() => handleRowAction("edit")}>Edit profile</MenuItem>
+        <MenuItem
+          onClick={() => handleRowAction("edit")}
+          disabled={approvedIds.includes(actionProfileId)}
+        >
+          Edit profile
+        </MenuItem>
         <MenuItem onClick={() => handleRowAction("duplicate")}>
           Duplicate profile
         </MenuItem>
-        <MenuItem onClick={() => handleRowAction("delete")}>Delete profile</MenuItem>
+        <MenuItem
+          onClick={() => handleRowAction("delete")}
+          disabled={approvedIds.includes(actionProfileId)}
+        >
+          Delete profile
+        </MenuItem>
         <Divider />
         <MenuItem onClick={() => handleRowAction("compare")}>
           Open comparison view
@@ -962,6 +1230,35 @@ const PatientProfilePage = () => {
           </Box>
         </Box>
       </Drawer>
+
+      <Dialog
+        open={approveDialogOpen}
+        onClose={() => setApproveDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Approve patient profile</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Approval is deliberate. Confirm this profile is ready for downstream
+            scenario use.
+          </Typography>
+          <TextField
+            label="Approval comment (optional)"
+            fullWidth
+            multiline
+            minRows={3}
+            value={approveCommentDraft}
+            onChange={(event) => setApproveCommentDraft(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproveDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleConfirmApprove}>
+            Confirm approval
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={discardConfirmOpen}

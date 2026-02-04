@@ -15,6 +15,8 @@ import {
   LinearProgress,
   Menu,
   MenuItem,
+  Tab,
+  Tabs,
   Select,
   Stack,
   Table,
@@ -29,7 +31,7 @@ import {
   Typography,
   Paper,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Add,
   Delete,
@@ -165,9 +167,17 @@ const sortKeys = new Set([
   "avgTimeLastPatient",
 ]);
 
-const SiteProfilePage = () => {
+const SiteProfilePage = ({
+  approvedPatientProfiles = [],
+  approvedSiteProfiles = {},
+  reviewComments = {},
+  onApproveProfile = () => {},
+  onRemoveApproval = () => {},
+  onUpdateReviewComment = () => {},
+}) => {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [activeTab, setActiveTab] = useState(0);
   const [sortState, setSortState] = useState({
     key: "avgTimeFirstPatient",
     direction: "asc",
@@ -185,6 +195,22 @@ const SiteProfilePage = () => {
   const [customTarget, setCustomTarget] = useState("mustHave");
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuProfileId, setMenuProfileId] = useState(null);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [approveTarget, setApproveTarget] = useState(null);
+  const [approveCommentDraft, setApproveCommentDraft] = useState("");
+
+  const approvedIds = useMemo(
+    () => Object.keys(approvedSiteProfiles),
+    [approvedSiteProfiles]
+  );
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      approvedIds.forEach((id) => next.add(id));
+      return Array.from(next);
+    });
+  }, [approvedIds]);
 
   const sortedProfiles = useMemo(() => {
     const withCounts = profiles.map((profile) => ({
@@ -210,10 +236,15 @@ const SiteProfilePage = () => {
       setSelectedIds(profiles.map((profile) => profile.id));
       return;
     }
-    setSelectedIds([]);
+    setSelectedIds((prev) =>
+      prev.filter((id) => approvedIds.includes(id))
+    );
   };
 
   const handleSelectOne = (profileId) => {
+    if (approvedIds.includes(profileId)) {
+      return;
+    }
     setSelectedIds((prev) =>
       prev.includes(profileId)
         ? prev.filter((id) => id !== profileId)
@@ -264,6 +295,9 @@ const SiteProfilePage = () => {
   };
 
   const handleDeleteProfiles = (profileIds) => {
+    if (profileIds.some((id) => approvedIds.includes(id))) {
+      return;
+    }
     const confirmDelete = window.confirm(
       "Delete the selected Site Profile(s)? This cannot be undone."
     );
@@ -397,6 +431,29 @@ const SiteProfilePage = () => {
 
   const criteriaOptionsWithCustom = [...systemCriteriaOptions, "Custom…"];
 
+  const handleRequestApprove = (profile) => {
+    setApproveTarget(profile);
+    setApproveCommentDraft(reviewComments[profile.id] || "");
+    setApproveDialogOpen(true);
+  };
+
+  const handleConfirmApprove = () => {
+    if (!approveTarget) {
+      return;
+    }
+    onApproveProfile(approveTarget.id, approveCommentDraft);
+    setApproveDialogOpen(false);
+    setApproveTarget(null);
+    setApproveCommentDraft("");
+  };
+
+  const handleRemoveFromReview = (profileId) => {
+    setSelectedIds((prev) => prev.filter((id) => id !== profileId));
+  };
+
+  const hasRequiredFields = (profile) =>
+    profile.name.trim() && profile.mustHaveCriteria.length > 0;
+
   const renderCriteriaSelect = (label, value, setter, target) => (
     <FormControl fullWidth size="small">
       <InputLabel id={`${label}-label`}>{label}</InputLabel>
@@ -438,6 +495,22 @@ const SiteProfilePage = () => {
     </FormControl>
   );
 
+  if (approvedPatientProfiles.length === 0) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Paper sx={{ p: 3, border: "1px solid", borderColor: "warning.main" }}>
+          <Stack spacing={1}>
+            <Typography variant="h6">Patient profile approval required</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Approve at least one patient profile before building site profiles.
+              Downstream criteria should only reference approved patient assumptions.
+            </Typography>
+          </Stack>
+        </Paper>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
@@ -460,121 +533,283 @@ const SiteProfilePage = () => {
               variant="outlined"
               startIcon={<Delete />}
               onClick={() => handleDeleteProfiles(selectedIds)}
-              disabled={selectedIds.length === 0}
+              disabled={
+                selectedIds.length === 0 ||
+                selectedIds.some((id) => approvedIds.includes(id))
+              }
             >
               Delete Site Profile
             </Button>
           </Stack>
         </Stack>
 
-        <Paper sx={{ p: 2 }}>
-          {/* Table-first layout keeps the table as the system of record. */}
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={
-                        selectedIds.length === profiles.length &&
-                        profiles.length > 0
-                      }
-                      indeterminate={
-                        selectedIds.length > 0 &&
-                        selectedIds.length < profiles.length
-                      }
-                      onChange={handleSelectAll}
-                    />
-                  </TableCell>
-                  {tableColumns.map((column) => (
-                    <TableCell key={column.key}>
-                      {sortKeys.has(column.key) ? (
-                        <TableSortLabel
-                          active={sortState.key === column.key}
-                          direction={sortState.direction}
-                          onClick={() => handleSort(column.key)}
-                        >
-                          {column.label}
-                        </TableSortLabel>
-                      ) : (
-                        column.label
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sortedProfiles.map((profile) => {
-                  const totalCriteria =
-                    profile.systemKnownCount + profile.unknownCount;
-                  const unknownPercent =
-                    totalCriteria === 0
-                      ? 0
-                      : Math.round((profile.unknownCount / totalCriteria) * 100);
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+        >
+          <Tab label="Workspace" />
+          <Tab label="Review & Approval" />
+        </Tabs>
 
-                  return (
-                    <TableRow
-                      key={profile.id}
-                      hover
-                      selected={selectedIds.includes(profile.id)}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedIds.includes(profile.id)}
-                          onChange={() => handleSelectOne(profile.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5}>
-                          <Typography variant="subtitle2">
-                            {profile.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Last updated {profile.modifiedAt}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{profile.mustHaveCriteria.length}</TableCell>
-                      <TableCell>{profile.preferredCriteria.length}</TableCell>
-                      <TableCell>{profile.systemKnownCount}</TableCell>
-                      <TableCell sx={{ minWidth: 180 }}>
-                        {/* Progress communicates known vs unknown criteria without charts. */}
-                        <Stack spacing={0.5}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={100 - unknownPercent}
-                            sx={{ height: 8, borderRadius: 8 }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            {profile.unknownCount} unknown · {unknownPercent}%
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{profile.avgTimeFirstPatient} days</TableCell>
-                      <TableCell>{profile.avgTimeQuarterPatients} days</TableCell>
-                      <TableCell>{profile.avgTimeThreeQuarterPatients} days</TableCell>
-                      <TableCell>{profile.avgTimeLastPatient} days</TableCell>
-                      <TableCell>{profile.addedBy}</TableCell>
-                      <TableCell>{profile.modifiedBy}</TableCell>
-                      <TableCell>
-                        <Tooltip title="Actions">
-                          <Button
-                            size="small"
-                            variant="text"
-                            onClick={(event) => handleMenuOpen(event, profile.id)}
-                            startIcon={<MoreVert />}
+        {activeTab === 0 ? (
+          <Paper sx={{ p: 2 }}>
+            {/* Table-first layout keeps the table as the system of record. */}
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={
+                          selectedIds.length === profiles.length &&
+                          profiles.length > 0
+                        }
+                        indeterminate={
+                          selectedIds.length > 0 &&
+                          selectedIds.length < profiles.length
+                        }
+                        onChange={handleSelectAll}
+                      />
+                    </TableCell>
+                    {tableColumns.map((column) => (
+                      <TableCell key={column.key}>
+                        {sortKeys.has(column.key) ? (
+                          <TableSortLabel
+                            active={sortState.key === column.key}
+                            direction={sortState.direction}
+                            onClick={() => handleSort(column.key)}
                           >
-                            More
-                          </Button>
-                        </Tooltip>
+                            {column.label}
+                          </TableSortLabel>
+                        ) : (
+                          column.label
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedProfiles.map((profile) => {
+                    const totalCriteria =
+                      profile.systemKnownCount + profile.unknownCount;
+                    const unknownPercent =
+                      totalCriteria === 0
+                        ? 0
+                        : Math.round((profile.unknownCount / totalCriteria) * 100);
+                    const isApproved = approvedIds.includes(profile.id);
+
+                    return (
+                      <TableRow
+                        key={profile.id}
+                        hover
+                        selected={selectedIds.includes(profile.id)}
+                      >
+                        <TableCell padding="checkbox">
+                          <Tooltip
+                            title={
+                              isApproved
+                                ? "Approved profiles are locked for governance."
+                                : "Add to review"
+                            }
+                          >
+                            <span>
+                              <Checkbox
+                                checked={selectedIds.includes(profile.id)}
+                                onChange={() => handleSelectOne(profile.id)}
+                                disabled={isApproved}
+                              />
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography variant="subtitle2">
+                                {profile.name}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={isApproved ? "Approved" : "Draft"}
+                                color={isApproved ? "success" : "default"}
+                              />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              Last updated {profile.modifiedAt}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{profile.mustHaveCriteria.length}</TableCell>
+                        <TableCell>{profile.preferredCriteria.length}</TableCell>
+                        <TableCell>{profile.systemKnownCount}</TableCell>
+                        <TableCell sx={{ minWidth: 180 }}>
+                          {/* Progress communicates known vs unknown criteria without charts. */}
+                          <Stack spacing={0.5}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={100 - unknownPercent}
+                              sx={{ height: 8, borderRadius: 8 }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {profile.unknownCount} unknown · {unknownPercent}%
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{profile.avgTimeFirstPatient} days</TableCell>
+                        <TableCell>{profile.avgTimeQuarterPatients} days</TableCell>
+                        <TableCell>{profile.avgTimeThreeQuarterPatients} days</TableCell>
+                        <TableCell>{profile.avgTimeLastPatient} days</TableCell>
+                        <TableCell>{profile.addedBy}</TableCell>
+                        <TableCell>{profile.modifiedBy}</TableCell>
+                        <TableCell>
+                          <Tooltip title="Actions">
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={(event) => handleMenuOpen(event, profile.id)}
+                              startIcon={<MoreVert />}
+                            >
+                              More
+                            </Button>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        ) : (
+          <Paper sx={{ p: 2 }}>
+            {/* Governance intent: approvals are explicit and versioned. */}
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="subtitle1">Review & Approval</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Confirm site profile criteria before they influence site recommendations.
+                </Typography>
+              </Box>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Profile</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell>Must-have vs Preferred</TableCell>
+                    <TableCell>Known vs Unknown</TableCell>
+                    <TableCell>Notes</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedProfiles
+                    .filter((profile) => selectedIds.includes(profile.id))
+                    .map((profile) => {
+                      const isApproved = approvedIds.includes(profile.id);
+                      const missingRequired = !hasRequiredFields(profile);
+                      const totalCriteria =
+                        profile.systemKnownCount + profile.unknownCount;
+                      return (
+                        <TableRow key={profile.id} hover>
+                          <TableCell>
+                            <Typography variant="subtitle2">{profile.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Last updated {profile.modifiedAt}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={isApproved ? "Approved" : "Draft"}
+                              color={isApproved ? "success" : "default"}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              Must-have: {profile.mustHaveCriteria.length}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Preferred: {profile.preferredCriteria.length}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              Known: {profile.systemKnownCount}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Unknown: {profile.unknownCount} of {totalCriteria}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 180 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              placeholder="Add comment"
+                              value={reviewComments[profile.id] || ""}
+                              onChange={(event) =>
+                                onUpdateReviewComment(profile.id, event.target.value)
+                              }
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <Tooltip
+                                title={
+                                  missingRequired
+                                    ? "Name and must-have criteria are required."
+                                    : isApproved
+                                    ? "Approved profiles are locked."
+                                    : ""
+                                }
+                              >
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleRequestApprove(profile)}
+                                    disabled={missingRequired || isApproved}
+                                  >
+                                    Approve
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title={isApproved ? "Approved profiles are locked." : ""}>
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => handleRemoveFromReview(profile.id)}
+                                    disabled={isApproved}
+                                  >
+                                    Remove
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => handleDuplicateProfile(profile.id)}
+                              >
+                                Duplicate for edits
+                              </Button>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {selectedIds.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          Select site profiles in the workspace to stage them for review.
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </Stack>
+          </Paper>
+        )}
       </Stack>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleMenuClose}>
@@ -586,6 +821,7 @@ const SiteProfilePage = () => {
               handleOpenDrawer("edit", profile);
             }
           }}
+          disabled={approvedIds.includes(menuProfileId)}
         >
           Edit Site Profile
         </MenuItem>
@@ -606,10 +842,39 @@ const SiteProfilePage = () => {
             }
             handleMenuClose();
           }}
+          disabled={approvedIds.includes(menuProfileId)}
         >
           Delete Site Profile
         </MenuItem>
       </Menu>
+
+      <Dialog
+        open={approveDialogOpen}
+        onClose={() => setApproveDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Approve site profile</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Confirm this site profile is ready for scenario recommendations.
+          </Typography>
+          <TextField
+            label="Approval comment (optional)"
+            fullWidth
+            multiline
+            minRows={3}
+            value={approveCommentDraft}
+            onChange={(event) => setApproveCommentDraft(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setApproveDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleConfirmApprove}>
+            Confirm approval
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Drawer
         anchor="right"

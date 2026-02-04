@@ -104,6 +104,12 @@ const formatTimestamp = () =>
     minute: "2-digit",
   }).format(new Date());
 
+const createScenarioReviewState = () => ({
+  patientProfiles: { approvals: {}, comments: {} },
+  siteProfiles: { approvals: {}, comments: {} },
+  countries: { approvals: {}, comments: {} },
+});
+
 const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => {
   const { scenarioId } = useParams();
   const navigate = useNavigate();
@@ -114,6 +120,7 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   const [disabledNotice, setDisabledNotice] = useState("");
   const [shortlistsByScenario, setShortlistsByScenario] = useState({});
   const [shortlistAuditByScenario, setShortlistAuditByScenario] = useState({});
+  const [approvalsByScenario, setApprovalsByScenario] = useState({});
 
   const activeScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === scenarioId),
@@ -142,6 +149,76 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   const basePath = scenarioBasePath(activeScenario.id);
   const shortlist = shortlistsByScenario[activeScenario.id] ?? [];
   const shortlistAudit = shortlistAuditByScenario[activeScenario.id] ?? [];
+  const scenarioReviewState =
+    approvalsByScenario[activeScenario.id] ?? createScenarioReviewState();
+
+  const approvedPatientProfiles = Object.values(
+    scenarioReviewState.patientProfiles.approvals
+  );
+  const approvedSiteProfiles = Object.values(
+    scenarioReviewState.siteProfiles.approvals
+  );
+  const approvedCountries = Object.values(scenarioReviewState.countries.approvals);
+
+  const updateScenarioReviewState = (sectionKey, updater) => {
+    setApprovalsByScenario((prev) => {
+      const current = prev[activeScenario.id] ?? createScenarioReviewState();
+      return {
+        ...prev,
+        [activeScenario.id]: {
+          ...current,
+          [sectionKey]: updater(current[sectionKey]),
+        },
+      };
+    });
+  };
+
+  const handleApproveEntity = (sectionKey, entityId, comments) => {
+    updateScenarioReviewState(sectionKey, (section) => ({
+      ...section,
+      approvals: {
+        ...section.approvals,
+        [entityId]: {
+          entityType: sectionKey,
+          entityId,
+          approvedBy: "You",
+          approvedAt: formatTimestamp(),
+          comments: comments || "",
+        },
+      },
+      comments: {
+        ...section.comments,
+        [entityId]: comments || section.comments?.[entityId] || "",
+      },
+    }));
+  };
+
+  const handleRemoveApproval = (sectionKey, entityId) => {
+    updateScenarioReviewState(sectionKey, (section) => {
+      const { [entityId]: _, ...rest } = section.approvals;
+      return {
+        ...section,
+        approvals: rest,
+      };
+    });
+  };
+
+  const handleUpdateReviewComment = (sectionKey, entityId, comment) => {
+    updateScenarioReviewState(sectionKey, (section) => ({
+      ...section,
+      comments: {
+        ...section.comments,
+        [entityId]: comment,
+      },
+    }));
+  };
+
+  const handleClearApprovals = (sectionKey) => {
+    updateScenarioReviewState(sectionKey, (section) => ({
+      ...section,
+      approvals: {},
+    }));
+  };
 
   const handleAddToShortlist = (site) => {
     setShortlistsByScenario((prev) => {
@@ -231,8 +308,12 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         label: "Site Recommendation",
         path: `${basePath}/site-recommendation`,
         status: steps.siteRecommendation,
-        enabled: artifacts.countriesApproved,
-        disabledReason: "Approve countries before recommending sites.",
+        enabled:
+          approvedPatientProfiles.length > 0 &&
+          approvedSiteProfiles.length > 0 &&
+          approvedCountries.length > 0,
+        disabledReason:
+          "Approve patient, site, and country selections before recommending sites.",
       },
       {
         label: "Review & Approval",
@@ -375,9 +456,63 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         <Box sx={{ flexGrow: 1 }}>
           <Routes>
             <Route index element={<Navigate to={defaultScenarioPath} replace />} />
-            <Route path="patient-profile" element={<PatientProfilePage />} />
-            <Route path="site-profile" element={<SiteProfilePage />} />
-            <Route path="country-selection" element={<CountrySelectionPage />} />
+            <Route
+              path="patient-profile"
+              element={
+                <PatientProfilePage
+                  approvedProfiles={scenarioReviewState.patientProfiles.approvals}
+                  reviewComments={scenarioReviewState.patientProfiles.comments}
+                  onApproveProfile={(entityId, comments) =>
+                    handleApproveEntity("patientProfiles", entityId, comments)
+                  }
+                  onRemoveApproval={(entityId) =>
+                    handleRemoveApproval("patientProfiles", entityId)
+                  }
+                  onUpdateReviewComment={(entityId, comment) =>
+                    handleUpdateReviewComment("patientProfiles", entityId, comment)
+                  }
+                />
+              }
+            />
+            <Route
+              path="site-profile"
+              element={
+                <SiteProfilePage
+                  approvedPatientProfiles={approvedPatientProfiles}
+                  approvedSiteProfiles={scenarioReviewState.siteProfiles.approvals}
+                  reviewComments={scenarioReviewState.siteProfiles.comments}
+                  onApproveProfile={(entityId, comments) =>
+                    handleApproveEntity("siteProfiles", entityId, comments)
+                  }
+                  onRemoveApproval={(entityId) =>
+                    handleRemoveApproval("siteProfiles", entityId)
+                  }
+                  onUpdateReviewComment={(entityId, comment) =>
+                    handleUpdateReviewComment("siteProfiles", entityId, comment)
+                  }
+                />
+              }
+            />
+            <Route
+              path="country-selection"
+              element={
+                <CountrySelectionPage
+                  approvedPatientProfiles={approvedPatientProfiles}
+                  approvedCountries={scenarioReviewState.countries.approvals}
+                  reviewComments={scenarioReviewState.countries.comments}
+                  onApproveCountry={(entityId, comments) =>
+                    handleApproveEntity("countries", entityId, comments)
+                  }
+                  onRemoveApproval={(entityId) =>
+                    handleRemoveApproval("countries", entityId)
+                  }
+                  onUpdateReviewComment={(entityId, comment) =>
+                    handleUpdateReviewComment("countries", entityId, comment)
+                  }
+                  onClearCountryApprovals={() => handleClearApprovals("countries")}
+                />
+              }
+            />
             <Route
               path="site-recommendation"
               element={
@@ -386,6 +521,9 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   onAddToShortlist={handleAddToShortlist}
                   onRemoveFromShortlist={handleRemoveFromShortlist}
                   onRecordShortlistAction={handleRecordShortlistAction}
+                  approvedPatientProfiles={approvedPatientProfiles}
+                  approvedSiteProfiles={approvedSiteProfiles}
+                  approvedCountries={approvedCountries}
                 />
               }
             />
@@ -398,6 +536,9 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   onAddToShortlist={handleAddToShortlist}
                   onRemoveFromShortlist={handleRemoveFromShortlist}
                   onRecordShortlistAction={handleRecordShortlistAction}
+                  approvedPatientProfiles={approvedPatientProfiles}
+                  approvedSiteProfiles={approvedSiteProfiles}
+                  approvedCountries={approvedCountries}
                 />
               }
             />

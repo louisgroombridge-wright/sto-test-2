@@ -151,6 +151,9 @@ const SiteRecommendationPage = ({
   onAddToShortlist,
   onRemoveFromShortlist,
   onRecordShortlistAction = () => {},
+  approvedPatientProfiles = [],
+  approvedSiteProfiles = [],
+  approvedCountries = [],
 }) => {
   const [sites, setSites] = useState(initialSites);
   const [selectedSites, setSelectedSites] = useState({});
@@ -185,6 +188,38 @@ const SiteRecommendationPage = ({
     action: "",
     responseNote: "",
   });
+
+  const missingApprovals = [
+    approvedPatientProfiles.length === 0
+      ? "Patient profile approval required."
+      : null,
+    approvedSiteProfiles.length === 0
+      ? "Site profile approval required."
+      : null,
+    approvedCountries.length === 0 ? "Country approval required." : null,
+  ].filter(Boolean);
+
+  if (missingApprovals.length > 0) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Paper sx={{ p: 3, border: "1px solid", borderColor: "warning.main" }}>
+          <Stack spacing={1}>
+            <Typography variant="h6">Approvals required</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Site recommendations only read approved scenario inputs.
+            </Typography>
+            <Stack spacing={0.5}>
+              {missingApprovals.map((message) => (
+                <Typography key={message} variant="body2">
+                  • {message}
+                </Typography>
+              ))}
+            </Stack>
+          </Stack>
+        </Paper>
+      </Box>
+    );
+  }
 
   const handleSelectSite = (siteId, checked) => {
     setSelectedSites((prev) => ({
