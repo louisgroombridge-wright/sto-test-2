@@ -836,10 +836,11 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
         </Paper>
 
         <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Site Name</TableCell>
+          <Box sx={{ overflowX: "auto" }}>
+            <Table size="small" sx={{ minWidth: 1200 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Site Name</TableCell>
                 <TableCell>Country</TableCell>
                 <TableCell>City</TableCell>
                 <TableCell>Historical Enrollment Rate</TableCell>
@@ -890,7 +891,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
                 </TableRow>
               ) : null}
             </TableBody>
-          </Table>
+            </Table>
+          </Box>
         </Paper>
 
         <Dialog open={suggestAddOpen} onClose={() => setSuggestAddOpen(false)} fullWidth maxWidth="sm">
@@ -1053,7 +1055,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
           </Paper>
 
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <Table size="small">
+            <Box sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 1400 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Select</TableCell>
@@ -1337,7 +1340,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
                   );
                 })}
               </TableBody>
-            </Table>
+              </Table>
+            </Box>
           </Paper>
 
           <Popover
@@ -1363,7 +1367,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
       ) : (
         <>
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <Table size="small">
+            <Box sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: 1200 }}>
               <TableHead>
                 <TableRow>
                   <TableCell>Site Name</TableCell>
@@ -1425,7 +1430,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
                   </TableRow>
                 ) : null}
               </TableBody>
-            </Table>
+              </Table>
+            </Box>
           </Paper>
 
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
