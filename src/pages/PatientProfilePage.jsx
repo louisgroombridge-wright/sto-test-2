@@ -14,6 +14,7 @@ import {
   Drawer,
   FormControl,
   Grid,
+  Icon,
   IconButton,
   InputLabel,
   Menu,
@@ -72,26 +73,20 @@ const initialProfiles = [
       {
         criterion: "Stage IV",
         value: "Required",
-        ttfp: "3.2 wks",
-        t25: "8.1 wks",
-        t75: "18.4 wks",
-        tLast: "26.9 wks",
+        impactPercent: 6,
+        direction: "up",
       },
       {
         criterion: "ECOG 0-1",
         value: "Strict",
-        ttfp: "4.0 wks",
-        t25: "9.6 wks",
-        t75: "20.2 wks",
-        tLast: "29.4 wks",
+        impactPercent: -8,
+        direction: "down",
       },
       {
         criterion: "No prior systemic therapy",
         value: "Directional",
-        ttfp: "5.1 wks",
-        t25: "11.3 wks",
-        t75: "22.7 wks",
-        tLast: "31.5 wks",
+        impactPercent: 3,
+        direction: "up",
       },
     ],
     kpis: [
@@ -132,18 +127,14 @@ const initialProfiles = [
       {
         criterion: "EGFR exon 19/21",
         value: "Required",
-        ttfp: "2.6 wks",
-        t25: "6.2 wks",
-        t75: "14.4 wks",
-        tLast: "21.8 wks",
+        impactPercent: 4,
+        direction: "up",
       },
       {
         criterion: "No prior TKI",
         value: "Directional",
-        ttfp: "3.4 wks",
-        t25: "7.9 wks",
-        t75: "16.5 wks",
-        tLast: "24.7 wks",
+        impactPercent: -5,
+        direction: "down",
       },
     ],
     kpis: [
@@ -184,18 +175,14 @@ const initialProfiles = [
       {
         criterion: "PD-L1 ≥50%",
         value: "Required",
-        ttfp: "3.8 wks",
-        t25: "9.1 wks",
-        t75: "19.8 wks",
-        tLast: "28.2 wks",
+        impactPercent: 5,
+        direction: "up",
       },
       {
         criterion: "Post chemo-IO",
         value: "Directional",
-        ttfp: "4.5 wks",
-        t25: "10.4 wks",
-        t75: "21.7 wks",
-        tLast: "30.6 wks",
+        impactPercent: 0,
+        direction: "flat",
       },
     ],
     kpis: [
@@ -596,17 +583,18 @@ const PatientProfilePage = () => {
                         {/* Row expansion is scoped to a single profile to avoid turning this page into a global dashboard. */}
                         <Box sx={{ p: 2, backgroundColor: "rgba(0, 0, 0, 0.02)" }}>
                           <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                            Criteria timeline (row-scoped)
+                            Criteria impact (row-scoped)
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            Impacts shown are directional estimates relative to the baseline patient profile.
                           </Typography>
                           <Table size="small">
                             <TableHead>
                               <TableRow>
                                 <TableCell>Criterion</TableCell>
                                 <TableCell>Value</TableCell>
-                                <TableCell>Avg. Time to First Patient</TableCell>
-                                <TableCell>Avg. Time to 25% Patients</TableCell>
-                                <TableCell>Avg. Time to 75% Patients</TableCell>
-                                <TableCell>Avg. Time to Last Patient</TableCell>
+                                <TableCell>Impact on Patients / Month (%)</TableCell>
+                                <TableCell>Direction</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -614,17 +602,30 @@ const PatientProfilePage = () => {
                                 <TableRow key={row.criterion}>
                                   <TableCell>{row.criterion}</TableCell>
                                   <TableCell>{row.value}</TableCell>
-                                  <TableCell>{row.ttfp}</TableCell>
-                                  <TableCell>{row.t25}</TableCell>
-                                  <TableCell>{row.t75}</TableCell>
-                                  <TableCell>{row.tLast}</TableCell>
+                                  <TableCell>
+                                    {row.impactPercent > 0
+                                      ? `+${row.impactPercent}%`
+                                      : row.impactPercent < 0
+                                      ? `${row.impactPercent}%`
+                                      : "0%"}
+                                  </TableCell>
+                                  <TableCell>
+                                    {/* Impacts are directional only; icons avoid implying precision or ranking. */}
+                                    {row.direction === "up" ? (
+                                      <Icon fontSize="small">arrow_upward</Icon>
+                                    ) : row.direction === "down" ? (
+                                      <Icon fontSize="small">arrow_downward</Icon>
+                                    ) : (
+                                      <Icon fontSize="small">remove</Icon>
+                                    )}
+                                  </TableCell>
                                 </TableRow>
                               ))}
                               {profile.criteriaTimeline.length === 0 ? (
                                 <TableRow>
-                                  <TableCell colSpan={6}>
+                                  <TableCell colSpan={4}>
                                     <Typography variant="body2" color="text.secondary">
-                                      No criteria timeline captured yet.
+                                      No criteria impact estimates captured yet.
                                     </Typography>
                                   </TableCell>
                                 </TableRow>
