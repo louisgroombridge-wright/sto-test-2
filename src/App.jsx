@@ -272,7 +272,7 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
       <Box component="main" sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
         <AppBar position="sticky" color="inherit" elevation={0}>
           {/* Scenario-first navigation keeps context in the app bar, not inside the workspace body. */}
-          <Toolbar sx={{ gap: 2, flexWrap: "wrap" }}>
+          <Toolbar sx={{ gap: 2, flexWrap: "wrap", py: 1.5 }}>
             <Box>
               <Typography variant="overline" color="text.secondary">
                 Active Scenario
