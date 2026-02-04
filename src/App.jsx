@@ -24,6 +24,7 @@ import PlaceholderPage from "./pages/PlaceholderPage";
 import CountrySelectionPage from "./pages/CountrySelectionPage";
 import SiteRecommendationPage from "./pages/SiteRecommendationPage";
 import ScenarioHubPage from "./pages/ScenarioHubPage";
+import ReviewApprovalPage from "./pages/ReviewApprovalPage";
 
 const defaultScenarioPath = "patient-profile";
 
@@ -94,6 +95,14 @@ const initialScenarios = [
 ];
 
 const scenarioBasePath = (scenarioId) => `/scenarios/${scenarioId}`;
+const formatTimestamp = () =>
+  new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
 
 const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => {
   const { scenarioId } = useParams();
@@ -103,6 +112,8 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   const [pendingScenarioId, setPendingScenarioId] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [disabledNotice, setDisabledNotice] = useState("");
+  const [shortlistsByScenario, setShortlistsByScenario] = useState({});
+  const [shortlistAuditByScenario, setShortlistAuditByScenario] = useState({});
 
   const activeScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === scenarioId),
@@ -129,6 +140,64 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   }
 
   const basePath = scenarioBasePath(activeScenario.id);
+  const shortlist = shortlistsByScenario[activeScenario.id] ?? [];
+  const shortlistAudit = shortlistAuditByScenario[activeScenario.id] ?? [];
+
+  const handleAddToShortlist = (site) => {
+    setShortlistsByScenario((prev) => {
+      const current = prev[activeScenario.id] ?? [];
+      if (current.some((item) => item.siteId === site.siteId)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [activeScenario.id]: [...current, site],
+      };
+    });
+  };
+
+  const handleRemoveFromShortlist = (siteId) => {
+    setShortlistsByScenario((prev) => ({
+      ...prev,
+      [activeScenario.id]: (prev[activeScenario.id] ?? []).filter(
+        (item) => item.siteId !== siteId
+      ),
+    }));
+  };
+
+  const handleUpdateShortlistNote = (siteId, notes) => {
+    setShortlistsByScenario((prev) => ({
+      ...prev,
+      [activeScenario.id]: (prev[activeScenario.id] ?? []).map((item) =>
+        item.siteId === siteId
+          ? {
+              ...item,
+              notes,
+              updatedBy: "You",
+              decisionAt: item.decisionAt || formatTimestamp(),
+            }
+          : item
+      ),
+    }));
+  };
+
+  const handleRecordShortlistAction = ({ action, site, source }) => {
+    setShortlistAuditByScenario((prev) => ({
+      ...prev,
+      [activeScenario.id]: [
+        {
+          id: `${site.siteId}-${Date.now()}`,
+          action,
+          siteId: site.siteId,
+          siteName: site.siteName,
+          user: "You",
+          timestamp: formatTimestamp(),
+          source,
+        },
+        ...(prev[activeScenario.id] ?? []),
+      ],
+    }));
+  };
 
   const optionItems = useMemo(() => {
     const steps = activeScenario.steps;
@@ -309,18 +378,39 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
             <Route path="patient-profile" element={<PatientProfilePage />} />
             <Route path="site-profile" element={<SiteProfilePage />} />
             <Route path="country-selection" element={<CountrySelectionPage />} />
-            <Route path="site-recommendation" element={<SiteRecommendationPage />} />
+            <Route
+              path="site-recommendation"
+              element={
+                <SiteRecommendationPage
+                  shortlist={shortlist}
+                  onAddToShortlist={handleAddToShortlist}
+                  onRemoveFromShortlist={handleRemoveFromShortlist}
+                  onRecordShortlistAction={handleRecordShortlistAction}
+                />
+              }
+            />
             <Route
               path="site-recommendation/shared"
-              element={<SiteRecommendationPage sharedView />}
+              element={
+                <SiteRecommendationPage
+                  sharedView
+                  shortlist={shortlist}
+                  onAddToShortlist={handleAddToShortlist}
+                  onRemoveFromShortlist={handleRemoveFromShortlist}
+                  onRecordShortlistAction={handleRecordShortlistAction}
+                />
+              }
             />
             <Route
               path="review-approval"
               element={
-                <PlaceholderPage
-                  title="Review & Approval"
-                  description="Finalize the scenario and capture sign-off decisions."
-                  {...pageProps}
+                <ReviewApprovalPage
+                  shortlist={shortlist}
+                  auditLog={shortlistAudit}
+                  onAddToShortlist={handleAddToShortlist}
+                  onRemoveFromShortlist={handleRemoveFromShortlist}
+                  onUpdateShortlistNote={handleUpdateShortlistNote}
+                  onRecordShortlistAction={handleRecordShortlistAction}
                 />
               }
             />
