@@ -243,11 +243,11 @@ const placeholderSuggestions = {
 };
 
 const PatientProfilePage = ({
-  approvedProfiles = {},
-  reviewComments = {},
-  onApproveProfile = () => {},
-  onRemoveApproval = () => {},
-  onUpdateReviewComment = () => {},
+  reviewItems = {},
+  onStartReview = () => {},
+  onMarkReviewed = () => {},
+  onAddComment = () => {},
+  onAcknowledgeComment = () => {},
 }) => {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [expandedId, setExpandedId] = useState(null);
@@ -266,9 +266,9 @@ const PatientProfilePage = ({
   const [newInclusion, setNewInclusion] = useState("");
   const [newExclusion, setNewExclusion] = useState("");
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
-  const [approveTarget, setApproveTarget] = useState(null);
-  const [approveCommentDraft, setApproveCommentDraft] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
   const [suggestForm, setSuggestForm] = useState({
     studyTitle: "",
     indication: "",
@@ -278,23 +278,34 @@ const PatientProfilePage = ({
   const fileInputRef = useRef(null);
   const initialDraftRef = useRef(emptyDraft);
 
-  const approvedIds = useMemo(
-    () => Object.keys(approvedProfiles),
-    [approvedProfiles]
-  );
+  const formatTimestamp = () =>
+    new Date().toISOString().slice(0, 16).replace("T", " ");
+
+  const getReviewItem = (profileId) =>
+    reviewItems[profileId] || {
+      status: "Draft",
+      comments: [],
+      history: [],
+      participants: [],
+      reviewStartAt: "",
+      reviewEndAt: "",
+    };
 
   const selectedProfiles = useMemo(
     () => profiles.filter((profile) => selectedIds.includes(profile.id)),
     [profiles, selectedIds]
   );
 
+  const shareLink = useMemo(() => {
+    if (typeof window === "undefined" || !shareTarget) {
+      return "";
+    }
+    return `${window.location.origin}${window.location.pathname}?review=${shareTarget.id}`;
+  }, [shareTarget]);
+
   useEffect(() => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      approvedIds.forEach((id) => next.add(id));
-      return Array.from(next);
-    });
-  }, [approvedIds]);
+    setSelectedIds((prev) => Array.from(new Set(prev)));
+  }, []);
 
   const isSaveDisabled = !draftProfile.name.trim() || !draftProfile.indication.trim();
 
@@ -384,16 +395,12 @@ const PatientProfilePage = ({
 
   const handleRowAction = (action) => {
     const profile = profiles.find((item) => item.id === actionProfileId);
-    const isApproved = profile ? approvedIds.includes(profile.id) : false;
     handleActionClose();
     if (!profile) {
       return;
     }
 
     if (action === "edit") {
-      if (isApproved) {
-        return;
-      }
       openDrawer("edit", profile);
     }
 
@@ -420,38 +427,34 @@ const PatientProfilePage = ({
   };
 
   const handleDeleteProfiles = () => {
-    if (selectedIds.some((id) => approvedIds.includes(id))) {
-      return;
-    }
     setProfiles((prev) => prev.filter((profile) => !selectedIds.includes(profile.id)));
     setSelectedIds([]);
     setDeleteConfirmOpen(false);
-  };
-
-  const handleRequestApprove = (profile) => {
-    setApproveTarget(profile);
-    setApproveCommentDraft(reviewComments[profile.id] || "");
-    setApproveDialogOpen(true);
-  };
-
-  const handleConfirmApprove = () => {
-    if (!approveTarget) {
-      return;
-    }
-    onApproveProfile(approveTarget.id, approveCommentDraft);
-    setApproveDialogOpen(false);
-    setApproveTarget(null);
-    setApproveCommentDraft("");
   };
 
   const handleRemoveFromReview = (profileId) => {
     setSelectedIds((prev) => prev.filter((id) => id !== profileId));
   };
 
-  const isProfileComplete = (profile) =>
-    profile.name.trim() &&
-    profile.indication.trim() &&
-    (profile.inclusionCriteria?.length || 0) > 0;
+  const handleSubmitComment = (profileId) => {
+    const draft = commentDrafts[profileId];
+    if (!draft?.text?.trim()) {
+      return;
+    }
+    onAddComment(profileId, {
+      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
+      author: "You",
+      text: draft.text.trim(),
+      tag: draft.tag || "FYI",
+      blocking: Boolean(draft.blocking),
+      acknowledged: false,
+      createdAt: formatTimestamp(),
+    });
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [profileId]: { text: "", tag: "FYI", blocking: false },
+    }));
+  };
 
   const handleDraftChange = (field, value) => {
     setDrawerTouched(true);
@@ -574,10 +577,7 @@ const PatientProfilePage = ({
           </Button>
           <Button
             variant="outlined"
-            disabled={
-              selectedIds.length === 0 ||
-              selectedIds.some((id) => approvedIds.includes(id))
-            }
+            disabled={selectedIds.length === 0}
             onClick={() => setDeleteConfirmOpen(true)}
           >
             Delete Patient Profile
@@ -591,7 +591,7 @@ const PatientProfilePage = ({
         sx={{ mb: 2 }}
       >
         <Tab label="Workspace" />
-        <Tab label="Review & Approval" />
+        <Tab label="Stakeholder Review" />
       </Tabs>
 
       {activeTab === 0 ? (
@@ -614,7 +614,7 @@ const PatientProfilePage = ({
             <TableBody>
               {profiles.map((profile) => {
                 const isExpanded = expandedId === profile.id;
-                const isApproved = approvedIds.includes(profile.id);
+                const reviewItem = getReviewItem(profile.id);
                 return (
                   <Fragment key={profile.id}>
                     <TableRow
@@ -626,11 +626,11 @@ const PatientProfilePage = ({
                       <TableCell>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                           <Typography variant="subtitle2">{profile.name}</Typography>
-                          {isApproved ? (
-                            <Chip size="small" label="Approved" color="success" />
-                          ) : (
-                            <Chip size="small" label="Draft" variant="outlined" />
-                          )}
+                          <Chip
+                            size="small"
+                            label={reviewItem.status || "Draft"}
+                            variant="outlined"
+                          />
                         </Box>
                       </TableCell>
                       <TableCell>{profile.indication}</TableCell>
@@ -643,19 +643,12 @@ const PatientProfilePage = ({
                       <TableCell>{profile.modifiedBy}</TableCell>
                       <TableCell align="right" onClick={(event) => event.stopPropagation()}>
                         <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
-                          <Tooltip
-                            title={
-                              isApproved
-                                ? "Approved profiles stay locked to preserve governance."
-                                : "Add to review"
-                            }
-                          >
+                          <Tooltip title="Add to review">
                             <span>
                               <Checkbox
                                 size="small"
                                 checked={selectedIds.includes(profile.id)}
                                 onChange={() => handleSelectRow(profile.id)}
-                                disabled={isApproved}
                               />
                             </span>
                           </Tooltip>
@@ -814,31 +807,40 @@ const PatientProfilePage = ({
         </TableContainer>
       ) : (
         <Paper variant="outlined" sx={{ p: 2 }}>
-          {/* Governance intent: review is read-only, approvals are explicit and traceable. */}
+          {/* Governance intent: review is read-only, feedback stays traceable. */}
           <Stack spacing={2}>
             <Box>
-              <Typography variant="subtitle1">Review & Approval</Typography>
+              <Typography variant="subtitle1">Stakeholder Review</Typography>
               <Typography variant="body2" color="text.secondary">
-                Approve patient profiles deliberately before they can feed country and
-                site feasibility steps.
+                Review patient profiles with stakeholders to align assumptions before
+                downstream feasibility steps.
               </Typography>
             </Box>
             <Table size="small">
               <TableHead>
                 <TableRow>
                   <TableCell>Profile</TableCell>
-                  <TableCell>Status</TableCell>
+                  <TableCell>Review Status</TableCell>
                   <TableCell>Inclusion / Exclusion Summary</TableCell>
                   <TableCell>Criteria Impact</TableCell>
                   <TableCell>Benchmark Studies</TableCell>
-                  <TableCell>Notes</TableCell>
+                  <TableCell>Comment Count</TableCell>
+                  <TableCell>Comments</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {selectedProfiles.map((profile) => {
-                  const isApproved = approvedIds.includes(profile.id);
-                  const missingRequired = !isProfileComplete(profile);
+                  const reviewItem = getReviewItem(profile.id);
+                  const comments = reviewItem.comments || [];
+                  const hasBlocking = comments.some(
+                    (comment) => comment.blocking && !comment.acknowledged
+                  );
+                  const commentDraft = commentDrafts[profile.id] || {
+                    text: "",
+                    tag: "FYI",
+                    blocking: false,
+                  };
                   return (
                     <TableRow key={profile.id} hover>
                       <TableCell>
@@ -848,11 +850,7 @@ const PatientProfilePage = ({
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          label={isApproved ? "Approved" : "Draft"}
-                          color={isApproved ? "success" : "default"}
-                        />
+                        <Chip size="small" label={reviewItem.status} variant="outlined" />
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2">
@@ -900,25 +898,135 @@ const PatientProfilePage = ({
                           {profile.benchmarkStudies.length} studies
                         </Typography>
                       </TableCell>
-                      <TableCell sx={{ minWidth: 180 }}>
-                        <TextField
+                      <TableCell>
+                        <Chip
                           size="small"
-                          fullWidth
-                          placeholder="Add comment"
-                          value={reviewComments[profile.id] || ""}
-                          onChange={(event) =>
-                            onUpdateReviewComment(profile.id, event.target.value)
-                          }
+                          label={`${comments.length} comments`}
+                          variant="outlined"
                         />
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 260 }}>
+                        <Stack spacing={1}>
+                          {comments.length === 0 ? (
+                            <Typography variant="caption" color="text.secondary">
+                              No comments yet.
+                            </Typography>
+                          ) : (
+                            comments.map((comment) => (
+                              <Paper
+                                key={comment.id}
+                                variant="outlined"
+                                sx={{ p: 1, backgroundColor: "background.default" }}
+                              >
+                                <Stack spacing={0.5}>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <Chip size="small" label={comment.tag || "FYI"} />
+                                    {comment.blocking ? (
+                                      <Chip size="small" label="Blocking" color="warning" />
+                                    ) : null}
+                                    <Typography variant="caption" color="text.secondary">
+                                      {comment.author} · {comment.createdAt}
+                                    </Typography>
+                                  </Stack>
+                                  <Typography variant="body2">{comment.text}</Typography>
+                                  {comment.blocking && !comment.acknowledged ? (
+                                    <Button
+                                      size="small"
+                                      variant="text"
+                                      onClick={() =>
+                                        onAcknowledgeComment(profile.id, comment.id)
+                                      }
+                                    >
+                                      Acknowledge blocking concern
+                                    </Button>
+                                  ) : null}
+                                </Stack>
+                              </Paper>
+                            ))
+                          )}
+                          <Stack spacing={1}>
+                            <FormControl size="small">
+                              <InputLabel id={`comment-tag-${profile.id}`}>Tag</InputLabel>
+                              <Select
+                                labelId={`comment-tag-${profile.id}`}
+                                label="Tag"
+                                value={commentDraft.tag}
+                                onChange={(event) =>
+                                  setCommentDrafts((prev) => ({
+                                    ...prev,
+                                    [profile.id]: {
+                                      ...commentDraft,
+                                      tag: event.target.value,
+                                    },
+                                  }))
+                                }
+                              >
+                                {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
+                                  <MenuItem key={tag} value={tag}>
+                                    {tag}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <TextField
+                              size="small"
+                              placeholder="Add a comment"
+                              value={commentDraft.text}
+                              onChange={(event) =>
+                                setCommentDrafts((prev) => ({
+                                  ...prev,
+                                  [profile.id]: {
+                                    ...commentDraft,
+                                    text: event.target.value,
+                                  },
+                                }))
+                              }
+                              multiline
+                              minRows={2}
+                            />
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Checkbox
+                                size="small"
+                                checked={commentDraft.blocking}
+                                onChange={(event) =>
+                                  setCommentDrafts((prev) => ({
+                                    ...prev,
+                                    [profile.id]: {
+                                      ...commentDraft,
+                                      blocking: event.target.checked,
+                                    },
+                                  }))
+                                }
+                              />
+                              <Typography variant="caption">
+                                Mark as blocking concern
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleSubmitComment(profile.id)}
+                                disabled={!commentDraft.text.trim()}
+                              >
+                                Submit comment
+                              </Button>
+                            </Stack>
+                          </Stack>
+                        </Stack>
                       </TableCell>
                       <TableCell align="right">
                         <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => onStartReview(profile.id)}
+                            disabled={reviewItem.status !== "Draft"}
+                          >
+                            Start Review
+                          </Button>
                           <Tooltip
                             title={
-                              missingRequired
-                                ? "Complete name, indication, and inclusion criteria."
-                                : isApproved
-                                ? "Approved profiles are locked."
+                              hasBlocking
+                                ? "Acknowledge blocking concerns before marking reviewed."
                                 : ""
                             }
                           >
@@ -926,25 +1034,23 @@ const PatientProfilePage = ({
                               <Button
                                 variant="contained"
                                 size="small"
-                                onClick={() => handleRequestApprove(profile)}
-                                disabled={missingRequired || isApproved}
+                                onClick={() => onMarkReviewed(profile.id)}
+                                disabled={reviewItem.status !== "Under Review" || hasBlocking}
                               >
-                                Approve
+                                Mark Reviewed
                               </Button>
                             </span>
                           </Tooltip>
-                          <Tooltip title={isApproved ? "Approved profiles are locked." : ""}>
-                            <span>
-                              <Button
-                                variant="outlined"
-                                size="small"
-                                onClick={() => handleRemoveFromReview(profile.id)}
-                                disabled={isApproved}
-                              >
-                                Remove
-                              </Button>
-                            </span>
-                          </Tooltip>
+                          <Button
+                            variant="text"
+                            size="small"
+                            onClick={() => {
+                              setShareTarget(profile);
+                              setShareDialogOpen(true);
+                            }}
+                          >
+                            Share for review
+                          </Button>
                           <Button
                             variant="text"
                             size="small"
@@ -960,6 +1066,13 @@ const PatientProfilePage = ({
                             }
                           >
                             Duplicate for edits
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => handleRemoveFromReview(profile.id)}
+                          >
+                            Remove
                           </Button>
                         </Stack>
                       </TableCell>
@@ -986,21 +1099,11 @@ const PatientProfilePage = ({
         open={Boolean(actionAnchor)}
         onClose={handleActionClose}
       >
-        <MenuItem
-          onClick={() => handleRowAction("edit")}
-          disabled={approvedIds.includes(actionProfileId)}
-        >
-          Edit profile
-        </MenuItem>
+        <MenuItem onClick={() => handleRowAction("edit")}>Edit profile</MenuItem>
         <MenuItem onClick={() => handleRowAction("duplicate")}>
           Duplicate profile
         </MenuItem>
-        <MenuItem
-          onClick={() => handleRowAction("delete")}
-          disabled={approvedIds.includes(actionProfileId)}
-        >
-          Delete profile
-        </MenuItem>
+        <MenuItem onClick={() => handleRowAction("delete")}>Delete profile</MenuItem>
         <Divider />
         <MenuItem onClick={() => handleRowAction("compare")}>
           Open comparison view
@@ -1232,35 +1335,6 @@ const PatientProfilePage = ({
       </Drawer>
 
       <Dialog
-        open={approveDialogOpen}
-        onClose={() => setApproveDialogOpen(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Approve patient profile</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Approval is deliberate. Confirm this profile is ready for downstream
-            scenario use.
-          </Typography>
-          <TextField
-            label="Approval comment (optional)"
-            fullWidth
-            multiline
-            minRows={3}
-            value={approveCommentDraft}
-            onChange={(event) => setApproveCommentDraft(event.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setApproveDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmApprove}>
-            Confirm approval
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
         open={discardConfirmOpen}
         onClose={() => setDiscardConfirmOpen(false)}
         fullWidth
@@ -1442,6 +1516,30 @@ const PatientProfilePage = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setComparisonOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Share for review</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Stakeholders can view this profile snapshot and add comments, but they
+            cannot edit or change its status.
+          </Typography>
+          <TextField
+            label="Shareable link"
+            value={shareLink}
+            fullWidth
+            InputProps={{ readOnly: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

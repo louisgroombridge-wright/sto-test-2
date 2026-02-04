@@ -30,7 +30,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import FilterListIcon from "@mui/icons-material/FilterList";
 
@@ -101,13 +101,12 @@ const formatTimestamp = () =>
   new Date().toISOString().slice(0, 16).replace("T", " ");
 
 const CountrySelectionPage = ({
-  approvedPatientProfiles = [],
-  approvedCountries = {},
-  reviewComments = {},
-  onApproveCountry = () => {},
-  onRemoveApproval = () => {},
-  onUpdateReviewComment = () => {},
-  onClearCountryApprovals = () => {},
+  reviewedPatientProfiles = [],
+  reviewItems = {},
+  onStartReview = () => {},
+  onMarkReviewed = () => {},
+  onAddComment = () => {},
+  onAcknowledgeComment = () => {},
 }) => {
   const [countries, setCountries] = useState(initialCountries);
   const [searchValue, setSearchValue] = useState("");
@@ -119,14 +118,22 @@ const CountrySelectionPage = ({
   });
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "asc" });
   const [filterAnchor, setFilterAnchor] = useState({ column: "", anchorEl: null });
-  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
-  const [approveTarget, setApproveTarget] = useState(null);
-  const [approveCommentDraft, setApproveCommentDraft] = useState("");
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
 
-  const approvedIds = useMemo(
-    () => Object.keys(approvedCountries),
-    [approvedCountries]
-  );
+  const formatTimestamp = () =>
+    new Date().toISOString().slice(0, 16).replace("T", " ");
+
+  const getReviewItem = (countryId) =>
+    reviewItems[countryId] || {
+      status: "Draft",
+      comments: [],
+      history: [],
+      participants: [],
+      reviewStartAt: "",
+      reviewEndAt: "",
+    };
 
   const filteredCountries = useMemo(() => {
     const normalized = searchValue.trim().toLowerCase();
@@ -187,9 +194,6 @@ const CountrySelectionPage = ({
   }, [countries]);
 
   const handleToggleCountry = (countryId) => {
-    if (approvedIds.includes(countryId)) {
-      return;
-    }
     setCountries((prev) =>
       prev.map((country) =>
         country.id === countryId
@@ -203,17 +207,6 @@ const CountrySelectionPage = ({
       )
     );
   };
-
-  useEffect(() => {
-    if (approvedIds.length === 0) {
-      return;
-    }
-    setCountries((prev) =>
-      prev.map((country) =>
-        approvedIds.includes(country.id) ? { ...country, selected: true } : country
-      )
-    );
-  }, [approvedIds]);
 
   const selectedCountries = useMemo(
     () => countries.filter((country) => country.selected),
@@ -279,22 +272,6 @@ const CountrySelectionPage = ({
     setSearchValue("");
   };
 
-  const handleRequestApprove = (country) => {
-    setApproveTarget(country);
-    setApproveCommentDraft(reviewComments[country.id] || "");
-    setApproveDialogOpen(true);
-  };
-
-  const handleConfirmApprove = () => {
-    if (!approveTarget) {
-      return;
-    }
-    onApproveCountry(approveTarget.id, approveCommentDraft);
-    setApproveDialogOpen(false);
-    setApproveTarget(null);
-    setApproveCommentDraft("");
-  };
-
   const handleRemoveFromReview = (countryId) => {
     setCountries((prev) =>
       prev.map((country) =>
@@ -310,19 +287,44 @@ const CountrySelectionPage = ({
     );
   };
 
-  const hasRequiredFields = (country) => Boolean(country.totalSites);
+  const handleSubmitComment = (countryId) => {
+    const draft = commentDrafts[countryId];
+    if (!draft?.text?.trim()) {
+      return;
+    }
+    onAddComment(countryId, {
+      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
+      author: "You",
+      text: draft.text.trim(),
+      tag: draft.tag || "FYI",
+      blocking: Boolean(draft.blocking),
+      acknowledged: false,
+      createdAt: formatTimestamp(),
+    });
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [countryId]: { text: "", tag: "FYI", blocking: false },
+    }));
+  };
+
+  const shareLink = useMemo(() => {
+    if (typeof window === "undefined" || !shareTarget) {
+      return "";
+    }
+    return `${window.location.origin}${window.location.pathname}?review=${shareTarget.id}`;
+  }, [shareTarget]);
 
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
-        {approvedPatientProfiles.length === 0 ? (
+        {reviewedPatientProfiles.length === 0 ? (
           <Paper sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}>
             <Stack spacing={1}>
               <Typography variant="subtitle1">
-                Patient profile approvals are still pending
+                Patient profile reviews are still pending
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                You can curate countries in parallel, but only approved patient
+                You can curate countries in parallel, but only reviewed patient
                 profiles should drive downstream site recommendations.
               </Typography>
             </Stack>
@@ -414,7 +416,7 @@ const CountrySelectionPage = ({
           onChange={(_, value) => setActiveTab(value)}
         >
           <Tab label="Workspace" />
-          <Tab label="Review & Approval" />
+          <Tab label="Stakeholder Review" />
         </Tabs>
 
         {activeTab === 0 ? (
@@ -450,22 +452,15 @@ const CountrySelectionPage = ({
                 </TableHead>
                 <TableBody>
                   {sortedCountries.map((country) => {
-                    const isApproved = approvedIds.includes(country.id);
+                    const reviewItem = getReviewItem(country.id);
                     return (
                       <TableRow key={country.id} hover>
                         <TableCell padding="checkbox">
-                          <Tooltip
-                            title={
-                              isApproved
-                                ? "Approved countries are locked for governance."
-                                : "Add to review"
-                            }
-                          >
+                          <Tooltip title="Add to review">
                             <span>
                               <Checkbox
                                 checked={country.selected}
                                 onChange={() => handleToggleCountry(country.id)}
-                                disabled={isApproved}
                               />
                             </span>
                           </Tooltip>
@@ -476,8 +471,8 @@ const CountrySelectionPage = ({
                               <Typography variant="subtitle2">{country.name}</Typography>
                               <Chip
                                 size="small"
-                                label={isApproved ? "Approved" : "Draft"}
-                                color={isApproved ? "success" : "default"}
+                                label={reviewItem.status || "Draft"}
+                                variant="outlined"
                               />
                             </Stack>
                             <Typography variant="caption" color="text.secondary">
@@ -508,35 +503,39 @@ const CountrySelectionPage = ({
           </Paper>
         ) : (
           <Paper sx={{ p: 2 }}>
-            {/* Governance intent: approval requires explicit confirmation per country list. */}
+            {/* Governance intent: review is comment-driven and traceable. */}
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="subtitle1">Review & Approval</Typography>
+                  <Typography variant="subtitle1">Stakeholder Review</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Approve the country set before it feeds site recommendations.
+                    Capture feedback on the country set before it feeds site recommendations.
                   </Typography>
                 </Box>
-                {approvedIds.length > 0 ? (
-                  <Button variant="outlined" onClick={onClearCountryApprovals}>
-                    Duplicate approved set for edits
-                  </Button>
-                ) : null}
               </Stack>
               <Table size="small">
                 <TableHead>
                   <TableRow>
                     <TableCell>Country</TableCell>
-                    <TableCell>Status</TableCell>
+                    <TableCell>Review Status</TableCell>
                     <TableCell>Total Sites</TableCell>
-                    <TableCell>Notes</TableCell>
+                    <TableCell>Comment Count</TableCell>
+                    <TableCell>Comments</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {selectedCountries.map((country) => {
-                    const isApproved = approvedIds.includes(country.id);
-                    const missingRequired = !hasRequiredFields(country);
+                    const reviewItem = getReviewItem(country.id);
+                    const comments = reviewItem.comments || [];
+                    const hasBlocking = comments.some(
+                      (comment) => comment.blocking && !comment.acknowledged
+                    );
+                    const commentDraft = commentDrafts[country.id] || {
+                      text: "",
+                      tag: "FYI",
+                      blocking: false,
+                    };
                     return (
                       <TableRow key={country.id} hover>
                         <TableCell>
@@ -546,32 +545,138 @@ const CountrySelectionPage = ({
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            size="small"
-                            label={isApproved ? "Approved" : "Draft"}
-                            color={isApproved ? "success" : "default"}
-                          />
+                          <Chip size="small" label={reviewItem.status} variant="outlined" />
                         </TableCell>
                         <TableCell>{country.totalSites}</TableCell>
-                        <TableCell sx={{ minWidth: 180 }}>
-                          <TextField
+                        <TableCell>
+                          <Chip
                             size="small"
-                            fullWidth
-                            placeholder="Add comment"
-                            value={reviewComments[country.id] || ""}
-                            onChange={(event) =>
-                              onUpdateReviewComment(country.id, event.target.value)
-                            }
+                            label={`${comments.length} comments`}
+                            variant="outlined"
                           />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 260 }}>
+                          <Stack spacing={1}>
+                            {comments.length === 0 ? (
+                              <Typography variant="caption" color="text.secondary">
+                                No comments yet.
+                              </Typography>
+                            ) : (
+                              comments.map((comment) => (
+                                <Paper
+                                  key={comment.id}
+                                  variant="outlined"
+                                  sx={{ p: 1, backgroundColor: "background.default" }}
+                                >
+                                  <Stack spacing={0.5}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                      <Chip size="small" label={comment.tag || "FYI"} />
+                                      {comment.blocking ? (
+                                        <Chip size="small" label="Blocking" color="warning" />
+                                      ) : null}
+                                      <Typography variant="caption" color="text.secondary">
+                                        {comment.author} · {comment.createdAt}
+                                      </Typography>
+                                    </Stack>
+                                    <Typography variant="body2">{comment.text}</Typography>
+                                    {comment.blocking && !comment.acknowledged ? (
+                                      <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() =>
+                                          onAcknowledgeComment(country.id, comment.id)
+                                        }
+                                      >
+                                        Acknowledge blocking concern
+                                      </Button>
+                                    ) : null}
+                                  </Stack>
+                                </Paper>
+                              ))
+                            )}
+                            <Stack spacing={1}>
+                              <FormControl size="small">
+                                <InputLabel id={`comment-tag-${country.id}`}>Tag</InputLabel>
+                                <Select
+                                  labelId={`comment-tag-${country.id}`}
+                                  label="Tag"
+                                  value={commentDraft.tag}
+                                  onChange={(event) =>
+                                    setCommentDrafts((prev) => ({
+                                      ...prev,
+                                      [country.id]: {
+                                        ...commentDraft,
+                                        tag: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
+                                    <MenuItem key={tag} value={tag}>
+                                      {tag}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              <TextField
+                                size="small"
+                                placeholder="Add a comment"
+                                value={commentDraft.text}
+                                onChange={(event) =>
+                                  setCommentDrafts((prev) => ({
+                                    ...prev,
+                                    [country.id]: {
+                                      ...commentDraft,
+                                      text: event.target.value,
+                                    },
+                                  }))
+                                }
+                                multiline
+                                minRows={2}
+                              />
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Checkbox
+                                  size="small"
+                                  checked={commentDraft.blocking}
+                                  onChange={(event) =>
+                                    setCommentDrafts((prev) => ({
+                                      ...prev,
+                                      [country.id]: {
+                                        ...commentDraft,
+                                        blocking: event.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                <Typography variant="caption">
+                                  Mark as blocking concern
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleSubmitComment(country.id)}
+                                  disabled={!commentDraft.text.trim()}
+                                >
+                                  Submit comment
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </Stack>
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => onStartReview(country.id)}
+                              disabled={reviewItem.status !== "Draft"}
+                            >
+                              Start Review
+                            </Button>
                             <Tooltip
                               title={
-                                missingRequired
-                                  ? "Total sites must be defined."
-                                  : isApproved
-                                  ? "Approved countries are locked."
+                                hasBlocking
+                                  ? "Acknowledge blocking concerns before marking reviewed."
                                   : ""
                               }
                             >
@@ -579,25 +684,30 @@ const CountrySelectionPage = ({
                                 <Button
                                   size="small"
                                   variant="contained"
-                                  onClick={() => handleRequestApprove(country)}
-                                  disabled={missingRequired || isApproved}
+                                  onClick={() => onMarkReviewed(country.id)}
+                                  disabled={reviewItem.status !== "Under Review" || hasBlocking}
                                 >
-                                  Approve
+                                  Mark Reviewed
                                 </Button>
                               </span>
                             </Tooltip>
-                            <Tooltip title={isApproved ? "Approved countries are locked." : ""}>
-                              <span>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => handleRemoveFromReview(country.id)}
-                                  disabled={isApproved}
-                                >
-                                  Remove
-                                </Button>
-                              </span>
-                            </Tooltip>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => {
+                                setShareTarget(country);
+                                setShareDialogOpen(true);
+                              }}
+                            >
+                              Share for review
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleRemoveFromReview(country.id)}
+                            >
+                              Remove
+                            </Button>
                           </Stack>
                         </TableCell>
                       </TableRow>
@@ -605,7 +715,7 @@ const CountrySelectionPage = ({
                   })}
                   {selectedCountries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={6}>
                         <Typography variant="body2" color="text.secondary">
                           Select countries in the workspace to stage them for review.
                         </Typography>
@@ -701,30 +811,26 @@ const CountrySelectionPage = ({
       </Popover>
 
       <Dialog
-        open={approveDialogOpen}
-        onClose={() => setApproveDialogOpen(false)}
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Approve country selection</DialogTitle>
+        <DialogTitle>Share for review</DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            Approval makes this country available for downstream site recommendations.
+            Stakeholders can view this country snapshot and add comments, but they
+            cannot edit or change its status.
           </Typography>
           <TextField
-            label="Approval comment (optional)"
+            label="Shareable link"
+            value={shareLink}
             fullWidth
-            multiline
-            minRows={3}
-            value={approveCommentDraft}
-            onChange={(event) => setApproveCommentDraft(event.target.value)}
+            InputProps={{ readOnly: true }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setApproveDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmApprove}>
-            Confirm approval
-          </Button>
+          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
