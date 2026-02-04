@@ -199,28 +199,6 @@ const SiteRecommendationPage = ({
     approvedCountries.length === 0 ? "Country approval required." : null,
   ].filter(Boolean);
 
-  if (missingApprovals.length > 0) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Paper sx={{ p: 3, border: "1px solid", borderColor: "warning.main" }}>
-          <Stack spacing={1}>
-            <Typography variant="h6">Approvals required</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Site recommendations only read approved scenario inputs.
-            </Typography>
-            <Stack spacing={0.5}>
-              {missingApprovals.map((message) => (
-                <Typography key={message} variant="body2">
-                  • {message}
-                </Typography>
-              ))}
-            </Stack>
-          </Stack>
-        </Paper>
-      </Box>
-    );
-  }
-
   const handleSelectSite = (siteId, checked) => {
     setSelectedSites((prev) => ({
       ...prev,
@@ -1010,6 +988,27 @@ const SiteRecommendationPage = ({
 
   return (
     <Box sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+      {missingApprovals.length > 0 ? (
+        <Paper
+          elevation={0}
+          sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}
+        >
+          <Stack spacing={1}>
+            <Typography variant="subtitle1">Approvals are still pending</Typography>
+            <Typography variant="body2" color="text.secondary">
+              You can review recommendations in parallel, but downstream actions
+              should only use approved scenario inputs.
+            </Typography>
+            <Stack spacing={0.5}>
+              {missingApprovals.map((message) => (
+                <Typography key={message} variant="body2">
+                  • {message}
+                </Typography>
+              ))}
+            </Stack>
+          </Stack>
+        </Paper>
+      ) : null}
       <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
         <Toolbar sx={{ gap: 2, flexWrap: "wrap" }}>
           <TextField
