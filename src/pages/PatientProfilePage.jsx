@@ -12,15 +12,11 @@ import {
   DialogTitle,
   Divider,
   Drawer,
-  FormControl,
   Grid,
   Icon,
   IconButton,
-  InputLabel,
   Menu,
   MenuItem,
-  OutlinedInput,
-  Select,
   Stack,
   Tab,
   Tabs,
@@ -41,6 +37,8 @@ import {
   ArrowUpward,
   Close,
   DeleteOutline,
+  ExpandLess,
+  ExpandMore,
   MoreVert,
   Remove,
   UploadFile,
@@ -246,7 +244,6 @@ const PatientProfilePage = ({
   reviewItems = {},
   onStartReview = () => {},
   onMarkReviewed = () => {},
-  onAddComment = () => {},
   onAcknowledgeComment = () => {},
 }) => {
   const [profiles, setProfiles] = useState(initialProfiles);
@@ -266,9 +263,9 @@ const PatientProfilePage = ({
   const [newInclusion, setNewInclusion] = useState("");
   const [newExclusion, setNewExclusion] = useState("");
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [commentDrafts, setCommentDrafts] = useState({});
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState(null);
+  const [expandedReviewId, setExpandedReviewId] = useState(null);
   const [suggestForm, setSuggestForm] = useState({
     studyTitle: "",
     indication: "",
@@ -277,9 +274,6 @@ const PatientProfilePage = ({
   const [suggestions, setSuggestions] = useState({ inclusion: [], exclusion: [] });
   const fileInputRef = useRef(null);
   const initialDraftRef = useRef(emptyDraft);
-
-  const formatTimestamp = () =>
-    new Date().toISOString().slice(0, 16).replace("T", " ");
 
   const getReviewItem = (profileId) =>
     reviewItems[profileId] || {
@@ -302,6 +296,9 @@ const PatientProfilePage = ({
     }
     return `${window.location.origin}${window.location.pathname}?review=${shareTarget.id}`;
   }, [shareTarget]);
+
+  const getLastCommentDate = (comments) =>
+    comments.length > 0 ? sortCommentsByDate(comments)[0].createdAt : "—";
 
   useEffect(() => {
     setSelectedIds((prev) => Array.from(new Set(prev)));
@@ -436,25 +433,14 @@ const PatientProfilePage = ({
     setSelectedIds((prev) => prev.filter((id) => id !== profileId));
   };
 
-  const handleSubmitComment = (profileId) => {
-    const draft = commentDrafts[profileId];
-    if (!draft?.text?.trim()) {
-      return;
-    }
-    onAddComment(profileId, {
-      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
-      author: "You",
-      text: draft.text.trim(),
-      tag: draft.tag || "FYI",
-      blocking: Boolean(draft.blocking),
-      acknowledged: false,
-      createdAt: formatTimestamp(),
-    });
-    setCommentDrafts((prev) => ({
-      ...prev,
-      [profileId]: { text: "", tag: "FYI", blocking: false },
-    }));
+  const handleToggleReviewRow = (profileId) => {
+    setExpandedReviewId((prev) => (prev === profileId ? null : profileId));
   };
+
+  const sortCommentsByDate = (comments) =>
+    [...comments].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   const handleDraftChange = (field, value) => {
     setDrawerTouched(true);
@@ -819,13 +805,12 @@ const PatientProfilePage = ({
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Profile</TableCell>
+                  <TableCell />
+                  <TableCell>Name</TableCell>
                   <TableCell>Review Status</TableCell>
-                  <TableCell>Inclusion / Exclusion Summary</TableCell>
-                  <TableCell>Criteria Impact</TableCell>
-                  <TableCell>Benchmark Studies</TableCell>
                   <TableCell>Comment Count</TableCell>
-                  <TableCell>Comments</TableCell>
+                  <TableCell>Last Comment Date</TableCell>
+                  <TableCell>Last Modified By</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -836,247 +821,172 @@ const PatientProfilePage = ({
                   const hasBlocking = comments.some(
                     (comment) => comment.blocking && !comment.acknowledged
                   );
-                  const commentDraft = commentDrafts[profile.id] || {
-                    text: "",
-                    tag: "FYI",
-                    blocking: false,
-                  };
+                  const isExpanded = expandedReviewId === profile.id;
+                  const sortedComments = sortCommentsByDate(comments);
                   return (
-                    <TableRow key={profile.id} hover>
-                      <TableCell>
-                        <Typography variant="subtitle2">{profile.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {profile.indication}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={reviewItem.status} variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          Inclusion: {profile.inclusionCriteria.length}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Exclusion: {profile.exclusionCriteria.length}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>Criterion</TableCell>
-                              <TableCell>Impact</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {profile.criteriaTimeline.slice(0, 3).map((row) => (
-                              <TableRow key={row.criterion}>
-                                <TableCell>{row.criterion}</TableCell>
-                                <TableCell>
-                                  {row.impactPercent > 0
-                                    ? `+${row.impactPercent}%`
-                                    : row.impactPercent < 0
-                                    ? `${row.impactPercent}%`
-                                    : "0%"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                            {profile.criteriaTimeline.length === 0 ? (
-                              <TableRow>
-                                <TableCell colSpan={2}>
-                                  <Typography variant="caption" color="text.secondary">
-                                    No impact table captured.
-                                  </Typography>
-                                </TableCell>
-                              </TableRow>
-                            ) : null}
-                          </TableBody>
-                        </Table>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {profile.benchmarkStudies.length} studies
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={`${comments.length} comments`}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell sx={{ minWidth: 260 }}>
-                        <Stack spacing={1}>
-                          {comments.length === 0 ? (
-                            <Typography variant="caption" color="text.secondary">
-                              No comments yet.
-                            </Typography>
-                          ) : (
-                            comments.map((comment) => (
-                              <Paper
-                                key={comment.id}
-                                variant="outlined"
-                                sx={{ p: 1, backgroundColor: "background.default" }}
-                              >
-                                <Stack spacing={0.5}>
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <Chip size="small" label={comment.tag || "FYI"} />
-                                    {comment.blocking ? (
-                                      <Chip size="small" label="Blocking" color="warning" />
-                                    ) : null}
-                                    <Typography variant="caption" color="text.secondary">
-                                      {comment.author} · {comment.createdAt}
-                                    </Typography>
-                                  </Stack>
-                                  <Typography variant="body2">{comment.text}</Typography>
-                                  {comment.blocking && !comment.acknowledged ? (
-                                    <Button
-                                      size="small"
-                                      variant="text"
-                                      onClick={() =>
-                                        onAcknowledgeComment(profile.id, comment.id)
-                                      }
-                                    >
-                                      Acknowledge blocking concern
-                                    </Button>
-                                  ) : null}
-                                </Stack>
-                              </Paper>
-                            ))
-                          )}
-                          <Stack spacing={1}>
-                            <FormControl size="small">
-                              <InputLabel id={`comment-tag-${profile.id}`}>Tag</InputLabel>
-                              <Select
-                                labelId={`comment-tag-${profile.id}`}
-                                label="Tag"
-                                value={commentDraft.tag}
-                                onChange={(event) =>
-                                  setCommentDrafts((prev) => ({
-                                    ...prev,
-                                    [profile.id]: {
-                                      ...commentDraft,
-                                      tag: event.target.value,
-                                    },
-                                  }))
-                                }
-                              >
-                                {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
-                                  <MenuItem key={tag} value={tag}>
-                                    {tag}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
-                            <TextField
+                    <Fragment key={profile.id}>
+                      <TableRow hover>
+                        <TableCell padding="checkbox">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleToggleReviewRow(profile.id)}
+                          >
+                            {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="subtitle2">{profile.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {profile.indication}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={reviewItem.status} variant="outlined" />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={`${comments.length} comments`}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell>{getLastCommentDate(comments)}</TableCell>
+                        <TableCell>{profile.modifiedBy}</TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button
+                              variant="outlined"
                               size="small"
-                              placeholder="Add a comment"
-                              value={commentDraft.text}
-                              onChange={(event) =>
-                                setCommentDrafts((prev) => ({
-                                  ...prev,
-                                  [profile.id]: {
-                                    ...commentDraft,
-                                    text: event.target.value,
-                                  },
-                                }))
+                              onClick={() => onStartReview(profile.id)}
+                              disabled={reviewItem.status !== "Draft"}
+                            >
+                              Start Review
+                            </Button>
+                            <Tooltip
+                              title={
+                                hasBlocking
+                                  ? "Acknowledge blocking concerns before marking reviewed."
+                                  : ""
                               }
-                              multiline
-                              minRows={2}
-                            />
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <Checkbox
+                            >
+                              <span>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => onMarkReviewed(profile.id)}
+                                  disabled={reviewItem.status !== "Under Review" || hasBlocking}
+                                >
+                                  Mark Reviewed
+                                </Button>
+                              </span>
+                            </Tooltip>
+                            {hasBlocking ? (
+                              <Button
+                                variant="text"
                                 size="small"
-                                checked={commentDraft.blocking}
-                                onChange={(event) =>
-                                  setCommentDrafts((prev) => ({
-                                    ...prev,
-                                    [profile.id]: {
-                                      ...commentDraft,
-                                      blocking: event.target.checked,
-                                    },
-                                  }))
+                                onClick={() =>
+                                  comments
+                                    .filter((comment) => comment.blocking && !comment.acknowledged)
+                                    .forEach((comment) =>
+                                      onAcknowledgeComment(profile.id, comment.id)
+                                    )
                                 }
-                              />
-                              <Typography variant="caption">
-                                Mark as blocking concern
-                              </Typography>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                onClick={() => handleSubmitComment(profile.id)}
-                                disabled={!commentDraft.text.trim()}
                               >
-                                Submit comment
+                                Acknowledge blocking
                               </Button>
-                            </Stack>
+                            ) : null}
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() => {
+                                setShareTarget(profile);
+                                setShareDialogOpen(true);
+                              }}
+                            >
+                              Share for review
+                            </Button>
+                            <Button
+                              variant="text"
+                              size="small"
+                              onClick={() =>
+                                openDrawer("duplicate", {
+                                  ...profile,
+                                  id: "",
+                                  name: `${profile.name} (Copy)`,
+                                  source: "Manual",
+                                  addedBy: "You",
+                                  modifiedBy: "You",
+                                })
+                              }
+                            >
+                              Duplicate for edits
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => handleRemoveFromReview(profile.id)}
+                            >
+                              Remove
+                            </Button>
                           </Stack>
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="right">
-                        <Stack direction="row" spacing={1} justifyContent="flex-end">
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => onStartReview(profile.id)}
-                            disabled={reviewItem.status !== "Draft"}
-                          >
-                            Start Review
-                          </Button>
-                          <Tooltip
-                            title={
-                              hasBlocking
-                                ? "Acknowledge blocking concerns before marking reviewed."
-                                : ""
-                            }
-                          >
-                            <span>
-                              <Button
-                                variant="contained"
-                                size="small"
-                                onClick={() => onMarkReviewed(profile.id)}
-                                disabled={reviewItem.status !== "Under Review" || hasBlocking}
-                              >
-                                Mark Reviewed
-                              </Button>
-                            </span>
-                          </Tooltip>
-                          <Button
-                            variant="text"
-                            size="small"
-                            onClick={() => {
-                              setShareTarget(profile);
-                              setShareDialogOpen(true);
-                            }}
-                          >
-                            Share for review
-                          </Button>
-                          <Button
-                            variant="text"
-                            size="small"
-                            onClick={() =>
-                              openDrawer("duplicate", {
-                                ...profile,
-                                id: "",
-                                name: `${profile.name} (Copy)`,
-                                source: "Manual",
-                                addedBy: "You",
-                                modifiedBy: "You",
-                              })
-                            }
-                          >
-                            Duplicate for edits
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => handleRemoveFromReview(profile.id)}
-                          >
-                            Remove
-                          </Button>
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell colSpan={7} sx={{ p: 0, borderBottom: 0 }}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            {/* Feedback is read-only here; comments originate from shared review links. */}
+                            <Box sx={{ p: 2, backgroundColor: "action.hover" }}>
+                              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Stakeholder comment overview
+                              </Typography>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Tag</TableCell>
+                                    <TableCell>Comment</TableCell>
+                                    <TableCell>Name</TableCell>
+                                    <TableCell>Added Date</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {sortedComments.length === 0 ? (
+                                    <TableRow>
+                                      <TableCell colSpan={4}>
+                                        <Typography variant="body2" color="text.secondary">
+                                          No stakeholder comments received yet.
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : (
+                                    sortedComments.map((comment) => (
+                                      <TableRow key={comment.id}>
+                                        <TableCell>
+                                          <Stack direction="row" spacing={1} alignItems="center">
+                                            <Chip size="small" label={comment.tag || "FYI"} />
+                                            {comment.blocking ? (
+                                              <Icon
+                                                fontSize="small"
+                                                color="disabled"
+                                                component={Remove}
+                                              />
+                                            ) : null}
+                                          </Stack>
+                                        </TableCell>
+                                        <TableCell sx={{ whiteSpace: "normal" }}>
+                                          {comment.text}
+                                        </TableCell>
+                                        <TableCell>{comment.author}</TableCell>
+                                        <TableCell>{comment.createdAt}</TableCell>
+                                      </TableRow>
+                                    ))
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </Fragment>
                   );
                 })}
                 {selectedProfiles.length === 0 ? (

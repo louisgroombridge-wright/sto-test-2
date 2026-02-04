@@ -16,6 +16,7 @@ import {
   Popover,
   Select,
   Stack,
+  Icon,
   Tab,
   Tabs,
   Table,
@@ -30,9 +31,10 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import { ExpandLess, ExpandMore, Remove } from "@mui/icons-material";
 
 const initialCountries = [
   {
@@ -105,7 +107,6 @@ const CountrySelectionPage = ({
   reviewItems = {},
   onStartReview = () => {},
   onMarkReviewed = () => {},
-  onAddComment = () => {},
   onAcknowledgeComment = () => {},
 }) => {
   const [countries, setCountries] = useState(initialCountries);
@@ -118,12 +119,9 @@ const CountrySelectionPage = ({
   });
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "asc" });
   const [filterAnchor, setFilterAnchor] = useState({ column: "", anchorEl: null });
-  const [commentDrafts, setCommentDrafts] = useState({});
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [shareTarget, setShareTarget] = useState(null);
-
-  const formatTimestamp = () =>
-    new Date().toISOString().slice(0, 16).replace("T", " ");
+  const [expandedReviewId, setExpandedReviewId] = useState(null);
 
   const getReviewItem = (countryId) =>
     reviewItems[countryId] || {
@@ -134,6 +132,18 @@ const CountrySelectionPage = ({
       reviewStartAt: "",
       reviewEndAt: "",
     };
+
+  const handleToggleReviewRow = (countryId) => {
+    setExpandedReviewId((prev) => (prev === countryId ? null : countryId));
+  };
+
+  const sortCommentsByDate = (comments) =>
+    [...comments].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+
+  const getLastCommentDate = (comments) =>
+    comments.length > 0 ? sortCommentsByDate(comments)[0].createdAt : "—";
 
   const filteredCountries = useMemo(() => {
     const normalized = searchValue.trim().toLowerCase();
@@ -285,26 +295,6 @@ const CountrySelectionPage = ({
           : country
       )
     );
-  };
-
-  const handleSubmitComment = (countryId) => {
-    const draft = commentDrafts[countryId];
-    if (!draft?.text?.trim()) {
-      return;
-    }
-    onAddComment(countryId, {
-      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
-      author: "You",
-      text: draft.text.trim(),
-      tag: draft.tag || "FYI",
-      blocking: Boolean(draft.blocking),
-      acknowledged: false,
-      createdAt: formatTimestamp(),
-    });
-    setCommentDrafts((prev) => ({
-      ...prev,
-      [countryId]: { text: "", tag: "FYI", blocking: false },
-    }));
   };
 
   const shareLink = useMemo(() => {
@@ -516,11 +506,12 @@ const CountrySelectionPage = ({
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell>Country</TableCell>
+                    <TableCell />
+                    <TableCell>Name</TableCell>
                     <TableCell>Review Status</TableCell>
-                    <TableCell>Total Sites</TableCell>
                     <TableCell>Comment Count</TableCell>
-                    <TableCell>Comments</TableCell>
+                    <TableCell>Last Comment Date</TableCell>
+                    <TableCell>Last Modified By</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
@@ -531,191 +522,164 @@ const CountrySelectionPage = ({
                     const hasBlocking = comments.some(
                       (comment) => comment.blocking && !comment.acknowledged
                     );
-                    const commentDraft = commentDrafts[country.id] || {
-                      text: "",
-                      tag: "FYI",
-                      blocking: false,
-                    };
+                    const isExpanded = expandedReviewId === country.id;
+                    const sortedComments = sortCommentsByDate(comments);
                     return (
-                      <TableRow key={country.id} hover>
-                        <TableCell>
-                          <Typography variant="subtitle2">{country.name}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {country.region}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip size="small" label={reviewItem.status} variant="outlined" />
-                        </TableCell>
-                        <TableCell>{country.totalSites}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            label={`${comments.length} comments`}
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 260 }}>
-                          <Stack spacing={1}>
-                            {comments.length === 0 ? (
-                              <Typography variant="caption" color="text.secondary">
-                                No comments yet.
-                              </Typography>
-                            ) : (
-                              comments.map((comment) => (
-                                <Paper
-                                  key={comment.id}
-                                  variant="outlined"
-                                  sx={{ p: 1, backgroundColor: "background.default" }}
-                                >
-                                  <Stack spacing={0.5}>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                      <Chip size="small" label={comment.tag || "FYI"} />
-                                      {comment.blocking ? (
-                                        <Chip size="small" label="Blocking" color="warning" />
-                                      ) : null}
-                                      <Typography variant="caption" color="text.secondary">
-                                        {comment.author} · {comment.createdAt}
-                                      </Typography>
-                                    </Stack>
-                                    <Typography variant="body2">{comment.text}</Typography>
-                                    {comment.blocking && !comment.acknowledged ? (
-                                      <Button
-                                        size="small"
-                                        variant="text"
-                                        onClick={() =>
-                                          onAcknowledgeComment(country.id, comment.id)
-                                        }
-                                      >
-                                        Acknowledge blocking concern
-                                      </Button>
-                                    ) : null}
-                                  </Stack>
-                                </Paper>
-                              ))
-                            )}
-                            <Stack spacing={1}>
-                              <FormControl size="small">
-                                <InputLabel id={`comment-tag-${country.id}`}>Tag</InputLabel>
-                                <Select
-                                  labelId={`comment-tag-${country.id}`}
-                                  label="Tag"
-                                  value={commentDraft.tag}
-                                  onChange={(event) =>
-                                    setCommentDrafts((prev) => ({
-                                      ...prev,
-                                      [country.id]: {
-                                        ...commentDraft,
-                                        tag: event.target.value,
-                                      },
-                                    }))
-                                  }
-                                >
-                                  {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
-                                    <MenuItem key={tag} value={tag}>
-                                      {tag}
-                                    </MenuItem>
-                                  ))}
-                                </Select>
-                              </FormControl>
-                              <TextField
+                      <Fragment key={country.id}>
+                        <TableRow hover>
+                          <TableCell padding="checkbox">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleToggleReviewRow(country.id)}
+                            >
+                              {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                            </IconButton>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="subtitle2">{country.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {country.region}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={reviewItem.status} variant="outlined" />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={`${comments.length} comments`}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>{getLastCommentDate(comments)}</TableCell>
+                          <TableCell>{country.lastChangedBy}</TableCell>
+                          <TableCell align="right">
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <Button
                                 size="small"
-                                placeholder="Add a comment"
-                                value={commentDraft.text}
-                                onChange={(event) =>
-                                  setCommentDrafts((prev) => ({
-                                    ...prev,
-                                    [country.id]: {
-                                      ...commentDraft,
-                                      text: event.target.value,
-                                    },
-                                  }))
+                                variant="outlined"
+                                onClick={() => onStartReview(country.id)}
+                                disabled={reviewItem.status !== "Draft"}
+                              >
+                                Start Review
+                              </Button>
+                              <Tooltip
+                                title={
+                                  hasBlocking
+                                    ? "Acknowledge blocking concerns before marking reviewed."
+                                    : ""
                                 }
-                                multiline
-                                minRows={2}
-                              />
-                              <Stack direction="row" spacing={1} alignItems="center">
-                                <Checkbox
+                              >
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => onMarkReviewed(country.id)}
+                                    disabled={reviewItem.status !== "Under Review" || hasBlocking}
+                                  >
+                                    Mark Reviewed
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              {hasBlocking ? (
+                                <Button
                                   size="small"
-                                  checked={commentDraft.blocking}
-                                  onChange={(event) =>
-                                    setCommentDrafts((prev) => ({
-                                      ...prev,
-                                      [country.id]: {
-                                        ...commentDraft,
-                                        blocking: event.target.checked,
-                                      },
-                                    }))
+                                  variant="text"
+                                  onClick={() =>
+                                    comments
+                                      .filter(
+                                        (comment) =>
+                                          comment.blocking && !comment.acknowledged
+                                      )
+                                      .forEach((comment) =>
+                                        onAcknowledgeComment(country.id, comment.id)
+                                      )
                                   }
-                                />
-                                <Typography variant="caption">
-                                  Mark as blocking concern
-                                </Typography>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => handleSubmitComment(country.id)}
-                                  disabled={!commentDraft.text.trim()}
                                 >
-                                  Submit comment
+                                  Acknowledge blocking
                                 </Button>
-                              </Stack>
+                              ) : null}
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => {
+                                  setShareTarget(country);
+                                  setShareDialogOpen(true);
+                                }}
+                              >
+                                Share for review
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleRemoveFromReview(country.id)}
+                              >
+                                Remove
+                              </Button>
                             </Stack>
-                          </Stack>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => onStartReview(country.id)}
-                              disabled={reviewItem.status !== "Draft"}
-                            >
-                              Start Review
-                            </Button>
-                            <Tooltip
-                              title={
-                                hasBlocking
-                                  ? "Acknowledge blocking concerns before marking reviewed."
-                                  : ""
-                              }
-                            >
-                              <span>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  onClick={() => onMarkReviewed(country.id)}
-                                  disabled={reviewItem.status !== "Under Review" || hasBlocking}
-                                >
-                                  Mark Reviewed
-                                </Button>
-                              </span>
-                            </Tooltip>
-                            <Button
-                              size="small"
-                              variant="text"
-                              onClick={() => {
-                                setShareTarget(country);
-                                setShareDialogOpen(true);
-                              }}
-                            >
-                              Share for review
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => handleRemoveFromReview(country.id)}
-                            >
-                              Remove
-                            </Button>
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
+                          </TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell colSpan={7} sx={{ p: 0, borderBottom: 0 }}>
+                            <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                              {/* Feedback is read-only here; comments originate from shared review links. */}
+                              <Box sx={{ p: 2, backgroundColor: "action.hover" }}>
+                                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                  Stakeholder comment overview
+                                </Typography>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow>
+                                      <TableCell>Tag</TableCell>
+                                      <TableCell>Comment</TableCell>
+                                      <TableCell>Name</TableCell>
+                                      <TableCell>Added Date</TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {sortedComments.length === 0 ? (
+                                      <TableRow>
+                                        <TableCell colSpan={4}>
+                                          <Typography variant="body2" color="text.secondary">
+                                            No stakeholder comments received yet.
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    ) : (
+                                      sortedComments.map((comment) => (
+                                        <TableRow key={comment.id}>
+                                          <TableCell>
+                                            <Stack direction="row" spacing={1} alignItems="center">
+                                              <Chip size="small" label={comment.tag || "FYI"} />
+                                              {comment.blocking ? (
+                                                <Icon
+                                                  fontSize="small"
+                                                  color="disabled"
+                                                  component={Remove}
+                                                />
+                                              ) : null}
+                                            </Stack>
+                                          </TableCell>
+                                          <TableCell sx={{ whiteSpace: "normal" }}>
+                                            {comment.text}
+                                          </TableCell>
+                                          <TableCell>{comment.author}</TableCell>
+                                          <TableCell>{comment.createdAt}</TableCell>
+                                        </TableRow>
+                                      ))
+                                    )}
+                                  </TableBody>
+                                </Table>
+                              </Box>
+                            </Collapse>
+                          </TableCell>
+                        </TableRow>
+                      </Fragment>
                     );
                   })}
                   {selectedCountries.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6}>
+                      <TableCell colSpan={7}>
                         <Typography variant="body2" color="text.secondary">
                           Select countries in the workspace to stage them for review.
                         </Typography>

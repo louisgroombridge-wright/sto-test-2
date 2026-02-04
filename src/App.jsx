@@ -494,9 +494,6 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   reviewItems={scenarioReviewState.patientProfiles.items}
                   onStartReview={(entityId) => handleStartReview("patientProfiles", entityId)}
                   onMarkReviewed={(entityId) => handleMarkReviewed("patientProfiles", entityId)}
-                  onAddComment={(entityId, comment) =>
-                    handleAddReviewComment("patientProfiles", entityId, comment)
-                  }
                   onAcknowledgeComment={(entityId, commentId) =>
                     handleAcknowledgeComment("patientProfiles", entityId, commentId)
                   }
@@ -511,9 +508,6 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   reviewItems={scenarioReviewState.siteProfiles.items}
                   onStartReview={(entityId) => handleStartReview("siteProfiles", entityId)}
                   onMarkReviewed={(entityId) => handleMarkReviewed("siteProfiles", entityId)}
-                  onAddComment={(entityId, comment) =>
-                    handleAddReviewComment("siteProfiles", entityId, comment)
-                  }
                   onAcknowledgeComment={(entityId, commentId) =>
                     handleAcknowledgeComment("siteProfiles", entityId, commentId)
                   }
@@ -528,9 +522,6 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   reviewItems={scenarioReviewState.countries.items}
                   onStartReview={(entityId) => handleStartReview("countries", entityId)}
                   onMarkReviewed={(entityId) => handleMarkReviewed("countries", entityId)}
-                  onAddComment={(entityId, comment) =>
-                    handleAddReviewComment("countries", entityId, comment)
-                  }
                   onAcknowledgeComment={(entityId, commentId) =>
                     handleAcknowledgeComment("countries", entityId, commentId)
                   }
