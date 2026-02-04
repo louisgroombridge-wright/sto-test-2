@@ -11,6 +11,7 @@ import {
   Menu,
   MenuItem,
   Paper,
+  TableContainer,
   Popover,
   Stack,
   Tab,
@@ -836,7 +837,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
         </Paper>
 
         <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-          <Box sx={{ overflowX: "auto" }}>
+          <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
             <Table size="small" sx={{ minWidth: 1200 }}>
               <TableHead>
                 <TableRow>
@@ -892,7 +893,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
               ) : null}
             </TableBody>
             </Table>
-          </Box>
+          </TableContainer>
         </Paper>
 
         <Dialog open={suggestAddOpen} onClose={() => setSuggestAddOpen(false)} fullWidth maxWidth="sm">
@@ -1055,7 +1056,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
           </Paper>
 
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <Box sx={{ overflowX: "auto" }}>
+            <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
               <Table size="small" sx={{ minWidth: 1400 }}>
               <TableHead>
                 <TableRow>
@@ -1341,7 +1342,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
                 })}
               </TableBody>
               </Table>
-            </Box>
+            </TableContainer>
           </Paper>
 
           <Popover
@@ -1367,7 +1368,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
       ) : (
         <>
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <Box sx={{ overflowX: "auto" }}>
+            <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
               <Table size="small" sx={{ minWidth: 1200 }}>
               <TableHead>
                 <TableRow>
@@ -1431,7 +1432,7 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
                 ) : null}
               </TableBody>
               </Table>
-            </Box>
+            </TableContainer>
           </Paper>
 
           <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
