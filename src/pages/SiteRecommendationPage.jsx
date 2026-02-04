@@ -14,7 +14,6 @@ import {
   TableContainer,
   Popover,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
@@ -22,7 +21,6 @@ import {
   TableRow,
   TableSortLabel,
   TextField,
-  Tabs,
   Toolbar,
   Tooltip,
   Typography,
@@ -30,7 +28,6 @@ import {
   Select,
   InputLabel,
   ListItemText,
-  Divider,
 } from "@mui/material";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
@@ -146,10 +143,15 @@ const textMatches = (value, filter) => {
   return normalized.includes(target);
 };
 
-const SHORTLIST_STORAGE_KEY = "siteRecommendationShortlist";
 const SUGGESTIONS_STORAGE_KEY = "siteRecommendationSuggestions";
 
-const SiteRecommendationPage = ({ sharedView = false }) => {
+const SiteRecommendationPage = ({
+  sharedView = false,
+  shortlist = [],
+  onAddToShortlist,
+  onRemoveFromShortlist,
+  onRecordShortlistAction = () => {},
+}) => {
   const [sites, setSites] = useState(initialSites);
   const [selectedSites, setSelectedSites] = useState({});
   const [searchValue, setSearchValue] = useState("");
@@ -161,15 +163,6 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [evidenceDialogOpen, setEvidenceDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("recommendations");
-  const [shortlist, setShortlist] = useState(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-    const stored = window.localStorage.getItem(SHORTLIST_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
-  });
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [suggestions, setSuggestions] = useState(() => {
     if (typeof window === "undefined") {
       return [];
@@ -199,12 +192,6 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
       [siteId]: checked,
     }));
   };
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(SHORTLIST_STORAGE_KEY, JSON.stringify(shortlist));
-    }
-  }, [shortlist]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -276,31 +263,36 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
     setSearchValue("");
   };
 
-  const handleAddToShortlist = (siteId) => {
-    setShortlist((prev) => (prev.includes(siteId) ? prev : [...prev, siteId]));
-  };
-
-  const handleRemoveFromShortlist = (siteId) => {
-    setShortlist((prev) => prev.filter((id) => id !== siteId));
-  };
-
   const handleAddToShortlistFromMenu = () => {
     if (activeSiteId) {
-      handleAddToShortlist(activeSiteId);
+      const site = sites.find((item) => item.siteId === activeSiteId);
+      if (site) {
+        onAddToShortlist(site);
+        onRecordShortlistAction({
+          action: "Added",
+          site,
+          source: "Site Recommendation",
+        });
+      }
     }
     handleMenuClose();
   };
 
   const handleRemoveFromShortlistFromMenu = () => {
     if (activeSiteId) {
-      handleRemoveFromShortlist(activeSiteId);
+      const site = sites.find((item) => item.siteId === activeSiteId);
+      if (site) {
+        onRemoveFromShortlist(site.siteId);
+        onRecordShortlistAction({
+          action: "Removed",
+          site,
+          source: "Site Recommendation",
+        });
+      }
     }
     handleMenuClose();
   };
 
-  const handleShareForReview = () => {
-    setShareDialogOpen(true);
-  };
 
   const handleOpenSuggestAdd = () => {
     setSuggestionDraft({
@@ -572,22 +564,8 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
     return { selectedCount, includedCount, excludedCount };
   }, [selectedSites, sites]);
 
-  const shortlistedSites = useMemo(
-    () => sites.filter((site) => shortlist.includes(site.siteId)),
-    [shortlist, sites]
-  );
+  const shortlistedSites = shortlist;
 
-  const pendingSuggestions = useMemo(
-    () => suggestions.filter((suggestion) => suggestion.status === "Pending"),
-    [suggestions]
-  );
-
-  const sharedLink = useMemo(() => {
-    if (typeof window === "undefined") {
-      return "https://example.com/site-recommendation/shared";
-    }
-    return `${window.location.origin}/site-recommendation/shared`;
-  }, []);
 
   const isFilterActive = (columnKey) => {
     const value = filters[columnKey];
@@ -998,493 +976,354 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
   return (
     <Box sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
       <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-        <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)} sx={{ px: 2 }}>
-          <Tab value="recommendations" label="Recommendations" />
-          <Tab value="review" label={`Review (${shortlist.length})`} />
-        </Tabs>
-        <Divider />
-        {activeTab === "recommendations" ? (
-          <Toolbar sx={{ gap: 2, flexWrap: "wrap" }}>
-            <TextField
-              label="Search"
-              placeholder="Search sites, countries, cities, users…"
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              size="small"
-              sx={{ minWidth: 260 }}
-            />
-            {/* Filters are user-directed to inspect trade-offs; no automatic ranking is applied. */}
-          </Toolbar>
-        ) : (
-          <Toolbar sx={{ justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
-            <Stack spacing={0.5}>
-              <Typography variant="subtitle1">Shortlist Review</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Review the shortlisted sites and apply explicit updates before sharing externally.
-              </Typography>
-            </Stack>
-            <Button variant="contained" onClick={handleShareForReview}>
-              Share for Review
-            </Button>
-          </Toolbar>
-        )}
+        <Toolbar sx={{ gap: 2, flexWrap: "wrap" }}>
+          <TextField
+            label="Search"
+            placeholder="Search sites, countries, cities, users…"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            size="small"
+            sx={{ minWidth: 260 }}
+          />
+          {/* Discovery stays in this tab; review happens in the dedicated Review & Approval page. */}
+        </Toolbar>
       </Paper>
 
-      {activeTab === "recommendations" ? (
-        <>
-          <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                Active filters
+      <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }}>
+          <Typography variant="subtitle2" color="text.secondary">
+            Active filters
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap">
+            {filterChips.length > 0 ? (
+              filterChips.map((chip) => (
+                <Chip key={chip.key} label={chip.label} onDelete={chip.onDelete} />
+              ))
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No filters applied.
               </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap">
-                {filterChips.length > 0 ? (
-                  filterChips.map((chip) => (
-                    <Chip key={chip.key} label={chip.label} onDelete={chip.onDelete} />
-                  ))
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    No filters applied.
-                  </Typography>
-                )}
-              </Stack>
-              <Box sx={{ flexGrow: 1 }} />
-              <Button variant="text" onClick={handleClearFilters} disabled={filterChips.length === 0}>
-                Clear all filters
-              </Button>
-            </Stack>
-          </Paper>
+            )}
+          </Stack>
+          <Box sx={{ flexGrow: 1 }} />
+          <Button variant="text" onClick={handleClearFilters} disabled={filterChips.length === 0}>
+            Clear all filters
+          </Button>
+        </Stack>
+      </Paper>
 
-          <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
-              <Table size="small" sx={{ minWidth: 1400 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Select</TableCell>
-                  <TableCell>Site Name</TableCell>
+      <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
+        <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
+          <Table size="small" sx={{ minWidth: 1400 }}>
+          <TableHead>
+            <TableRow>
+              <TableCell>Select</TableCell>
+              <TableCell>Site Name</TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2">Country</Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "country")}
+                    color={isFilterActive("country") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>City</TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "historicalEnrollmentRate"}
+                    direction={
+                      sortConfig.key === "historicalEnrollmentRate" ? sortConfig.direction : "asc"
+                    }
+                    onClick={() => handleSortRequest("historicalEnrollmentRate")}
+                  >
+                    Historical Enrollment Rate
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "historicalEnrollmentRate")}
+                    color={isFilterActive("historicalEnrollmentRate") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "timeToFirstPatient"}
+                    direction={sortConfig.key === "timeToFirstPatient" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("timeToFirstPatient")}
+                  >
+                    Time to First Patient
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "timeToFirstPatient")}
+                    color={isFilterActive("timeToFirstPatient") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "siteActivationTime"}
+                    direction={sortConfig.key === "siteActivationTime" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("siteActivationTime")}
+                  >
+                    Site Activation Time
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "siteActivationTime")}
+                    color={isFilterActive("siteActivationTime") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "screeningSuccessRate"}
+                    direction={sortConfig.key === "screeningSuccessRate" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("screeningSuccessRate")}
+                  >
+                    Screening Success Rate
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "screeningSuccessRate")}
+                    color={isFilterActive("screeningSuccessRate") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "dropoutRate"}
+                    direction={sortConfig.key === "dropoutRate" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("dropoutRate")}
+                  >
+                    Dropout Rate
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "dropoutRate")}
+                    color={isFilterActive("dropoutRate") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2">Prior Trial Experience</Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "priorTrialExperience")}
+                    color={isFilterActive("priorTrialExperience") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "competitiveTrialOverlap"}
+                    direction={
+                      sortConfig.key === "competitiveTrialOverlap" ? sortConfig.direction : "asc"
+                    }
+                    onClick={() => handleSortRequest("competitiveTrialOverlap")}
+                  >
+                    Competitive Trial Overlap
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "competitiveTrialOverlap")}
+                    color={isFilterActive("competitiveTrialOverlap") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "compositeSiteScore"}
+                    direction={sortConfig.key === "compositeSiteScore" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("compositeSiteScore")}
+                  >
+                    Composite Site Score
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "compositeSiteScore")}
+                    color={isFilterActive("compositeSiteScore") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography variant="subtitle2">Nice-to-Have Criteria Met</Typography>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "niceToHaveCriteriaMet")}
+                    color={isFilterActive("niceToHaveCriteriaMet") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "createdBy"}
+                    direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("createdBy")}
+                  >
+                    Created By
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "createdBy")}
+                    color={isFilterActive("createdBy") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TableSortLabel
+                    active={sortConfig.key === "updatedBy"}
+                    direction={sortConfig.key === "updatedBy" ? sortConfig.direction : "asc"}
+                    onClick={() => handleSortRequest("updatedBy")}
+                  >
+                    Updated By
+                  </TableSortLabel>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleOpenFilter(event, "updatedBy")}
+                    color={isFilterActive("updatedBy") ? "primary" : "default"}
+                  >
+                    <FilterListIcon fontSize="inherit" />
+                  </IconButton>
+                </Stack>
+              </TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {sortedSites.map((site) => {
+              const isShortlisted = shortlist.some((item) => item.siteId === site.siteId);
+              return (
+                <TableRow key={site.siteId} hover>
                   <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="subtitle2">Country</Typography>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "country")}
-                        color={isFilterActive("country") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>City</TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "historicalEnrollmentRate"}
-                        direction={
-                          sortConfig.key === "historicalEnrollmentRate" ? sortConfig.direction : "asc"
-                        }
-                        onClick={() => handleSortRequest("historicalEnrollmentRate")}
-                      >
-                        Historical Enrollment Rate
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "historicalEnrollmentRate")}
-                        color={isFilterActive("historicalEnrollmentRate") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
+                    <Checkbox
+                      checked={!!selectedSites[site.siteId]}
+                      onChange={(event) => handleSelectSite(site.siteId, event.target.checked)}
+                    />
                   </TableCell>
                   <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "timeToFirstPatient"}
-                        direction={sortConfig.key === "timeToFirstPatient" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("timeToFirstPatient")}
-                      >
-                        Time to First Patient
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "timeToFirstPatient")}
-                        color={isFilterActive("timeToFirstPatient") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "siteActivationTime"}
-                        direction={sortConfig.key === "siteActivationTime" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("siteActivationTime")}
-                      >
-                        Site Activation Time
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "siteActivationTime")}
-                        color={isFilterActive("siteActivationTime") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "screeningSuccessRate"}
-                        direction={sortConfig.key === "screeningSuccessRate" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("screeningSuccessRate")}
-                      >
-                        Screening Success Rate
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "screeningSuccessRate")}
-                        color={isFilterActive("screeningSuccessRate") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "dropoutRate"}
-                        direction={sortConfig.key === "dropoutRate" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("dropoutRate")}
-                      >
-                        Dropout Rate
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "dropoutRate")}
-                        color={isFilterActive("dropoutRate") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="subtitle2">Prior Trial Experience</Typography>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "priorTrialExperience")}
-                        color={isFilterActive("priorTrialExperience") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "competitiveTrialOverlap"}
-                        direction={
-                          sortConfig.key === "competitiveTrialOverlap" ? sortConfig.direction : "asc"
-                        }
-                        onClick={() => handleSortRequest("competitiveTrialOverlap")}
-                      >
-                        Competitive Trial Overlap
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "competitiveTrialOverlap")}
-                        color={isFilterActive("competitiveTrialOverlap") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "compositeSiteScore"}
-                        direction={sortConfig.key === "compositeSiteScore" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("compositeSiteScore")}
-                      >
-                        Composite Site Score
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "compositeSiteScore")}
-                        color={isFilterActive("compositeSiteScore") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <Typography variant="subtitle2">Nice-to-Have Criteria Met</Typography>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "niceToHaveCriteriaMet")}
-                        color={isFilterActive("niceToHaveCriteriaMet") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "createdBy"}
-                        direction={sortConfig.key === "createdBy" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("createdBy")}
-                      >
-                        Created By
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "createdBy")}
-                        color={isFilterActive("createdBy") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <TableSortLabel
-                        active={sortConfig.key === "updatedBy"}
-                        direction={sortConfig.key === "updatedBy" ? sortConfig.direction : "asc"}
-                        onClick={() => handleSortRequest("updatedBy")}
-                      >
-                        Updated By
-                      </TableSortLabel>
-                      <IconButton
-                        size="small"
-                        onClick={(event) => handleOpenFilter(event, "updatedBy")}
-                        color={isFilterActive("updatedBy") ? "primary" : "default"}
-                      >
-                        <FilterListIcon fontSize="inherit" />
-                      </IconButton>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sortedSites.map((site) => {
-                  const isShortlisted = shortlist.includes(site.siteId);
-                  return (
-                    <TableRow key={site.siteId} hover>
-                      <TableCell>
-                        <Checkbox
-                          checked={!!selectedSites[site.siteId]}
-                          onChange={(event) => handleSelectSite(site.siteId, event.target.checked)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5}>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Typography variant="subtitle2">{site.siteName}</Typography>
-                            {isShortlisted ? <Chip label="Shortlisted" size="small" /> : null}
-                          </Stack>
-                          <Typography variant="caption" color="text.secondary">
-                            {site.siteId}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{site.country || "Unknown"}</TableCell>
-                      <TableCell>{site.city || "Unknown"}</TableCell>
-                      {/* Metrics remain side-by-side to avoid hiding trade-offs behind a single score. */}
-                      <TableCell>{site.historicalEnrollmentRate || "Unknown"}</TableCell>
-                      <TableCell>{site.timeToFirstPatient || "Unknown"}</TableCell>
-                      <TableCell>{site.siteActivationTime || "Unknown"}</TableCell>
-                      <TableCell>{site.screeningSuccessRate || "Unknown"}</TableCell>
-                      <TableCell>{site.dropoutRate || "Unknown"}</TableCell>
-                      <TableCell>{site.priorTrialExperience || "Unknown"}</TableCell>
-                      <TableCell>{site.competitiveTrialOverlap || "Unknown"}</TableCell>
-                      <TableCell>{site.compositeSiteScore || "Unknown"}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={site.niceToHaveCriteriaMet || "Unknown"}
-                          size="small"
-                          color={site.niceToHaveCriteriaMet === "Yes" ? "success" : "default"}
-                          variant={site.niceToHaveCriteriaMet === "Yes" ? "filled" : "outlined"}
-                        />
-                      </TableCell>
-                      <TableCell>{site.createdBy || "Unknown"}</TableCell>
-                      <TableCell>{site.updatedBy || "Unknown"}</TableCell>
-                      <TableCell>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                          <Chip
-                            label={site.decisionStatus}
-                            size="small"
-                            color={
-                              site.decisionStatus === "Included"
-                                ? "success"
-                                : site.decisionStatus === "Excluded"
-                                ? "default"
-                                : "warning"
-                            }
-                            variant={site.decisionStatus === "Excluded" ? "outlined" : "filled"}
-                          />
-                          <Tooltip title="Actions">
-                            <IconButton size="small" onClick={(event) => handleMenuOpen(event, site.siteId)}>
-                              <MoreVertIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                        <Typography variant="caption" color="text.secondary">
-                          {site.decisionAt
-                            ? `Decision by ${site.decisionBy} on ${site.decisionAt}`
-                            : "No decision recorded"}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-
-          <Popover
-            open={Boolean(filterAnchor.anchorEl)}
-            anchorEl={filterAnchor.anchorEl}
-            onClose={handleCloseFilter}
-            anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
-          >
-            <Box sx={{ p: 2 }}>{renderFilterContent()}</Box>
-          </Popover>
-
-          <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Selection summary
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <Chip label={`Selected rows: ${summary.selectedCount}`} />
-              <Chip label={`Included: ${summary.includedCount}`} color="success" />
-              <Chip label={`Excluded: ${summary.excludedCount}`} variant="outlined" />
-            </Stack>
-          </Paper>
-        </>
-      ) : (
-        <>
-          <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
-            <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
-              <Table size="small" sx={{ minWidth: 1200 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Site Name</TableCell>
-                  <TableCell>Country</TableCell>
-                  <TableCell>City</TableCell>
-                  <TableCell>Historical Enrollment Rate</TableCell>
-                  <TableCell>Time to First Patient</TableCell>
-                  <TableCell>Site Activation Time</TableCell>
-                  <TableCell>Screening Success Rate</TableCell>
-                  <TableCell>Dropout Rate</TableCell>
-                  <TableCell>Prior Trial Experience</TableCell>
-                  <TableCell>Competitive Trial Overlap</TableCell>
-                  <TableCell>Composite Site Score</TableCell>
-                  <TableCell>Nice-to-Have Criteria Met</TableCell>
-                  <TableCell>Created By</TableCell>
-                  <TableCell>Updated By</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {shortlistedSites.map((site) => (
-                  <TableRow key={site.siteId} hover>
-                    <TableCell>{site.siteName}</TableCell>
-                    <TableCell>{site.country || "Unknown"}</TableCell>
-                    <TableCell>{site.city || "Unknown"}</TableCell>
-                    <TableCell>{site.historicalEnrollmentRate || "Unknown"}</TableCell>
-                    <TableCell>{site.timeToFirstPatient || "Unknown"}</TableCell>
-                    <TableCell>{site.siteActivationTime || "Unknown"}</TableCell>
-                    <TableCell>{site.screeningSuccessRate || "Unknown"}</TableCell>
-                    <TableCell>{site.dropoutRate || "Unknown"}</TableCell>
-                    <TableCell>{site.priorTrialExperience || "Unknown"}</TableCell>
-                    <TableCell>{site.competitiveTrialOverlap || "Unknown"}</TableCell>
-                    <TableCell>{site.compositeSiteScore || "Unknown"}</TableCell>
-                    <TableCell>{site.niceToHaveCriteriaMet || "Unknown"}</TableCell>
-                    <TableCell>{site.createdBy || "Unknown"}</TableCell>
-                    <TableCell>{site.updatedBy || "Unknown"}</TableCell>
-                    <TableCell>
-                      <Stack direction="row" spacing={1}>
-                        <Button size="small" onClick={() => handleRemoveFromShortlist(site.siteId)}>
-                          Remove
-                        </Button>
-                        <Button size="small" onClick={() => handleOpenNoteDialog(site.siteId)}>
-                          Add note
-                        </Button>
-                        <Button size="small" onClick={handleViewEvidence}>
-                          View evidence
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {shortlistedSites.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={15}>
-                      <Typography variant="body2" color="text.secondary">
-                        No sites shortlisted yet. Add sites from the Recommendations tab.
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-              </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-
-          <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Pending suggestions
-            </Typography>
-            <Stack spacing={1}>
-              {pendingSuggestions.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No pending suggestions from external reviewers.
-                </Typography>
-              ) : (
-                pendingSuggestions.map((suggestion) => (
-                  <Paper key={suggestion.id} variant="outlined" sx={{ p: 2 }}>
                     <Stack spacing={0.5}>
-                      <Typography variant="subtitle2">
-                        {suggestion.type} • {suggestion.siteName}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {suggestion.country} • {suggestion.city}
-                      </Typography>
-                      <Typography variant="body2">Comment: {suggestion.comment}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Suggested by {suggestion.suggestedBy} on {suggestion.suggestedAt}
-                      </Typography>
-                      <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          onClick={() => handleDecisionOpen(suggestion.id, "Accepted")}
-                        >
-                          Accept
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => handleDecisionOpen(suggestion.id, "Rejected")}
-                        >
-                          Reject
-                        </Button>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="subtitle2">{site.siteName}</Typography>
+                        {isShortlisted ? <Chip label="In Review" size="small" /> : null}
                       </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        {site.siteId}
+                      </Typography>
                     </Stack>
-                  </Paper>
-                ))
-              )}
-            </Stack>
-          </Paper>
-        </>
-      )}
+                  </TableCell>
+                  <TableCell>{site.country || "Unknown"}</TableCell>
+                  <TableCell>{site.city || "Unknown"}</TableCell>
+                  {/* Metrics remain side-by-side to avoid hiding trade-offs behind a single score. */}
+                  <TableCell>{site.historicalEnrollmentRate || "Unknown"}</TableCell>
+                  <TableCell>{site.timeToFirstPatient || "Unknown"}</TableCell>
+                  <TableCell>{site.siteActivationTime || "Unknown"}</TableCell>
+                  <TableCell>{site.screeningSuccessRate || "Unknown"}</TableCell>
+                  <TableCell>{site.dropoutRate || "Unknown"}</TableCell>
+                  <TableCell>{site.priorTrialExperience || "Unknown"}</TableCell>
+                  <TableCell>{site.competitiveTrialOverlap || "Unknown"}</TableCell>
+                  <TableCell>{site.compositeSiteScore || "Unknown"}</TableCell>
+                  <TableCell>
+                    <Chip
+                      label={site.niceToHaveCriteriaMet || "Unknown"}
+                      size="small"
+                      color={site.niceToHaveCriteriaMet === "Yes" ? "success" : "default"}
+                      variant={site.niceToHaveCriteriaMet === "Yes" ? "filled" : "outlined"}
+                    />
+                  </TableCell>
+                  <TableCell>{site.createdBy || "Unknown"}</TableCell>
+                  <TableCell>{site.updatedBy || "Unknown"}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Chip
+                        label={site.decisionStatus}
+                        size="small"
+                        color={
+                          site.decisionStatus === "Included"
+                            ? "success"
+                            : site.decisionStatus === "Excluded"
+                            ? "default"
+                            : "warning"
+                        }
+                        variant={site.decisionStatus === "Excluded" ? "outlined" : "filled"}
+                      />
+                      <Tooltip title="Actions">
+                        <IconButton size="small" onClick={(event) => handleMenuOpen(event, site.siteId)}>
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      {site.decisionAt
+                        ? `Decision by ${site.decisionBy} on ${site.decisionAt}`
+                        : "No decision recorded"}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
+
+      <Popover
+        open={Boolean(filterAnchor.anchorEl)}
+        anchorEl={filterAnchor.anchorEl}
+        onClose={handleCloseFilter}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      >
+        <Box sx={{ p: 2 }}>{renderFilterContent()}</Box>
+      </Popover>
+
+      <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 2 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>
+          Selection summary
+        </Typography>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+          <Chip label={`Selected rows: ${summary.selectedCount}`} />
+          <Chip label={`Included: ${summary.includedCount}`} color="success" />
+          <Chip label={`Excluded: ${summary.excludedCount}`} variant="outlined" />
+        </Stack>
+      </Paper>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleMenuClose}>
-        {shortlist.includes(activeSiteId) ? (
+        {shortlist.some((site) => site.siteId === activeSiteId) ? (
           <MenuItem onClick={handleRemoveFromShortlistFromMenu}>Remove from Shortlist</MenuItem>
         ) : (
           <MenuItem onClick={handleAddToShortlistFromMenu}>Add to Shortlist</MenuItem>
@@ -1494,20 +1333,6 @@ const SiteRecommendationPage = ({ sharedView = false }) => {
         <MenuItem onClick={handleOpenNoteDialog}>Add note</MenuItem>
         <MenuItem onClick={handleViewEvidence}>View evidence</MenuItem>
       </Menu>
-
-      <Dialog open={shareDialogOpen} onClose={() => setShareDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Share for Review</DialogTitle>
-        <DialogContent sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            This link is read-only. External reviewers can only submit suggestions with required
-            comments; shortlist changes remain owner-controlled.
-          </Typography>
-          <TextField label="Review link" value={sharedLink} fullWidth InputProps={{ readOnly: true }} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={noteDialogOpen} onClose={() => setNoteDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>Add note</DialogTitle>
