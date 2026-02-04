@@ -15,6 +15,8 @@ import {
   LinearProgress,
   Menu,
   MenuItem,
+  Tab,
+  Tabs,
   Select,
   Stack,
   Table,
@@ -165,9 +167,17 @@ const sortKeys = new Set([
   "avgTimeLastPatient",
 ]);
 
-const SiteProfilePage = () => {
+const SiteProfilePage = ({
+  reviewedPatientProfiles = [],
+  reviewItems = {},
+  onStartReview = () => {},
+  onMarkReviewed = () => {},
+  onAddComment = () => {},
+  onAcknowledgeComment = () => {},
+}) => {
   const [profiles, setProfiles] = useState(initialProfiles);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [activeTab, setActiveTab] = useState(0);
   const [sortState, setSortState] = useState({
     key: "avgTimeFirstPatient",
     direction: "asc",
@@ -185,6 +195,22 @@ const SiteProfilePage = () => {
   const [customTarget, setCustomTarget] = useState("mustHave");
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuProfileId, setMenuProfileId] = useState(null);
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+
+  const formatTimestamp = () =>
+    new Date().toISOString().slice(0, 16).replace("T", " ");
+
+  const getReviewItem = (profileId) =>
+    reviewItems[profileId] || {
+      status: "Draft",
+      comments: [],
+      history: [],
+      participants: [],
+      reviewStartAt: "",
+      reviewEndAt: "",
+    };
 
   const sortedProfiles = useMemo(() => {
     const withCounts = profiles.map((profile) => ({
@@ -204,6 +230,13 @@ const SiteProfilePage = () => {
 
     return sorted;
   }, [profiles, sortState]);
+
+  const shareLink = useMemo(() => {
+    if (typeof window === "undefined" || !shareTarget) {
+      return "";
+    }
+    return `${window.location.origin}${window.location.pathname}?review=${shareTarget.id}`;
+  }, [shareTarget]);
 
   const handleSelectAll = (event) => {
     if (event.target.checked) {
@@ -397,6 +430,30 @@ const SiteProfilePage = () => {
 
   const criteriaOptionsWithCustom = [...systemCriteriaOptions, "Custom…"];
 
+  const handleRemoveFromReview = (profileId) => {
+    setSelectedIds((prev) => prev.filter((id) => id !== profileId));
+  };
+
+  const handleSubmitComment = (profileId) => {
+    const draft = commentDrafts[profileId];
+    if (!draft?.text?.trim()) {
+      return;
+    }
+    onAddComment(profileId, {
+      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
+      author: "You",
+      text: draft.text.trim(),
+      tag: draft.tag || "FYI",
+      blocking: Boolean(draft.blocking),
+      acknowledged: false,
+      createdAt: formatTimestamp(),
+    });
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [profileId]: { text: "", tag: "FYI", blocking: false },
+    }));
+  };
+
   const renderCriteriaSelect = (label, value, setter, target) => (
     <FormControl fullWidth size="small">
       <InputLabel id={`${label}-label`}>{label}</InputLabel>
@@ -441,6 +498,19 @@ const SiteProfilePage = () => {
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
+        {reviewedPatientProfiles.length === 0 ? (
+          <Paper sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}>
+            <Stack spacing={1}>
+              <Typography variant="subtitle1">
+                Patient profile reviews are still pending
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                You can draft site profiles in parallel, but only reviewed patient
+                profiles should drive downstream recommendations.
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={2}
@@ -467,114 +537,386 @@ const SiteProfilePage = () => {
           </Stack>
         </Stack>
 
-        <Paper sx={{ p: 2 }}>
-          {/* Table-first layout keeps the table as the system of record. */}
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">
-                    <Checkbox
-                      checked={
-                        selectedIds.length === profiles.length &&
-                        profiles.length > 0
-                      }
-                      indeterminate={
-                        selectedIds.length > 0 &&
-                        selectedIds.length < profiles.length
-                      }
-                      onChange={handleSelectAll}
-                    />
-                  </TableCell>
-                  {tableColumns.map((column) => (
-                    <TableCell key={column.key}>
-                      {sortKeys.has(column.key) ? (
-                        <TableSortLabel
-                          active={sortState.key === column.key}
-                          direction={sortState.direction}
-                          onClick={() => handleSort(column.key)}
-                        >
-                          {column.label}
-                        </TableSortLabel>
-                      ) : (
-                        column.label
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sortedProfiles.map((profile) => {
-                  const totalCriteria =
-                    profile.systemKnownCount + profile.unknownCount;
-                  const unknownPercent =
-                    totalCriteria === 0
-                      ? 0
-                      : Math.round((profile.unknownCount / totalCriteria) * 100);
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+        >
+          <Tab label="Workspace" />
+          <Tab label="Stakeholder Review" />
+        </Tabs>
 
-                  return (
-                    <TableRow
-                      key={profile.id}
-                      hover
-                      selected={selectedIds.includes(profile.id)}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={selectedIds.includes(profile.id)}
-                          onChange={() => handleSelectOne(profile.id)}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Stack spacing={0.5}>
-                          <Typography variant="subtitle2">
-                            {profile.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Last updated {profile.modifiedAt}
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{profile.mustHaveCriteria.length}</TableCell>
-                      <TableCell>{profile.preferredCriteria.length}</TableCell>
-                      <TableCell>{profile.systemKnownCount}</TableCell>
-                      <TableCell sx={{ minWidth: 180 }}>
-                        {/* Progress communicates known vs unknown criteria without charts. */}
-                        <Stack spacing={0.5}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={100 - unknownPercent}
-                            sx={{ height: 8, borderRadius: 8 }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            {profile.unknownCount} unknown · {unknownPercent}%
-                          </Typography>
-                        </Stack>
-                      </TableCell>
-                      <TableCell>{profile.avgTimeFirstPatient} days</TableCell>
-                      <TableCell>{profile.avgTimeQuarterPatients} days</TableCell>
-                      <TableCell>{profile.avgTimeThreeQuarterPatients} days</TableCell>
-                      <TableCell>{profile.avgTimeLastPatient} days</TableCell>
-                      <TableCell>{profile.addedBy}</TableCell>
-                      <TableCell>{profile.modifiedBy}</TableCell>
-                      <TableCell>
-                        <Tooltip title="Actions">
-                          <Button
-                            size="small"
-                            variant="text"
-                            onClick={(event) => handleMenuOpen(event, profile.id)}
-                            startIcon={<MoreVert />}
+        {activeTab === 0 ? (
+          <Paper sx={{ p: 2 }}>
+            {/* Table-first layout keeps the table as the system of record. */}
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        checked={
+                          selectedIds.length === profiles.length &&
+                          profiles.length > 0
+                        }
+                        indeterminate={
+                          selectedIds.length > 0 &&
+                          selectedIds.length < profiles.length
+                        }
+                        onChange={handleSelectAll}
+                      />
+                    </TableCell>
+                    {tableColumns.map((column) => (
+                      <TableCell key={column.key}>
+                        {sortKeys.has(column.key) ? (
+                          <TableSortLabel
+                            active={sortState.key === column.key}
+                            direction={sortState.direction}
+                            onClick={() => handleSort(column.key)}
                           >
-                            More
-                          </Button>
-                        </Tooltip>
+                            {column.label}
+                          </TableSortLabel>
+                        ) : (
+                          column.label
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedProfiles.map((profile) => {
+                    const totalCriteria =
+                      profile.systemKnownCount + profile.unknownCount;
+                    const unknownPercent =
+                      totalCriteria === 0
+                        ? 0
+                        : Math.round((profile.unknownCount / totalCriteria) * 100);
+                    const reviewItem = getReviewItem(profile.id);
+
+                    return (
+                      <TableRow
+                        key={profile.id}
+                        hover
+                        selected={selectedIds.includes(profile.id)}
+                      >
+                        <TableCell padding="checkbox">
+                          <Tooltip title="Add to review">
+                            <span>
+                              <Checkbox
+                                checked={selectedIds.includes(profile.id)}
+                                onChange={() => handleSelectOne(profile.id)}
+                              />
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography variant="subtitle2">
+                                {profile.name}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={reviewItem.status || "Draft"}
+                                variant="outlined"
+                              />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              Last updated {profile.modifiedAt}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{profile.mustHaveCriteria.length}</TableCell>
+                        <TableCell>{profile.preferredCriteria.length}</TableCell>
+                        <TableCell>{profile.systemKnownCount}</TableCell>
+                        <TableCell sx={{ minWidth: 180 }}>
+                          {/* Progress communicates known vs unknown criteria without charts. */}
+                          <Stack spacing={0.5}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={100 - unknownPercent}
+                              sx={{ height: 8, borderRadius: 8 }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {profile.unknownCount} unknown · {unknownPercent}%
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{profile.avgTimeFirstPatient} days</TableCell>
+                        <TableCell>{profile.avgTimeQuarterPatients} days</TableCell>
+                        <TableCell>{profile.avgTimeThreeQuarterPatients} days</TableCell>
+                        <TableCell>{profile.avgTimeLastPatient} days</TableCell>
+                        <TableCell>{profile.addedBy}</TableCell>
+                        <TableCell>{profile.modifiedBy}</TableCell>
+                        <TableCell>
+                          <Tooltip title="Actions">
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={(event) => handleMenuOpen(event, profile.id)}
+                              startIcon={<MoreVert />}
+                            >
+                              More
+                            </Button>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        ) : (
+          <Paper sx={{ p: 2 }}>
+            {/* Governance intent: review stays read-only and comment-driven. */}
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="subtitle1">Stakeholder Review</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Gather feedback on site profile criteria before they influence recommendations.
+                </Typography>
+              </Box>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Profile</TableCell>
+                    <TableCell>Review Status</TableCell>
+                    <TableCell>Must-have vs Preferred</TableCell>
+                    <TableCell>Known vs Unknown</TableCell>
+                    <TableCell>Comment Count</TableCell>
+                    <TableCell>Comments</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedProfiles
+                    .filter((profile) => selectedIds.includes(profile.id))
+                    .map((profile) => {
+                      const reviewItem = getReviewItem(profile.id);
+                      const comments = reviewItem.comments || [];
+                      const hasBlocking = comments.some(
+                        (comment) => comment.blocking && !comment.acknowledged
+                      );
+                      const commentDraft = commentDrafts[profile.id] || {
+                        text: "",
+                        tag: "FYI",
+                        blocking: false,
+                      };
+                      const totalCriteria =
+                        profile.systemKnownCount + profile.unknownCount;
+                      return (
+                        <TableRow key={profile.id} hover>
+                          <TableCell>
+                            <Typography variant="subtitle2">{profile.name}</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              Last updated {profile.modifiedAt}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={reviewItem.status} variant="outlined" />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              Must-have: {profile.mustHaveCriteria.length}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Preferred: {profile.preferredCriteria.length}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              Known: {profile.systemKnownCount}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Unknown: {profile.unknownCount} of {totalCriteria}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={`${comments.length} comments`}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell sx={{ minWidth: 260 }}>
+                            <Stack spacing={1}>
+                              {comments.length === 0 ? (
+                                <Typography variant="caption" color="text.secondary">
+                                  No comments yet.
+                                </Typography>
+                              ) : (
+                                comments.map((comment) => (
+                                  <Paper
+                                    key={comment.id}
+                                    variant="outlined"
+                                    sx={{ p: 1, backgroundColor: "background.default" }}
+                                  >
+                                    <Stack spacing={0.5}>
+                                      <Stack direction="row" spacing={1} alignItems="center">
+                                        <Chip size="small" label={comment.tag || "FYI"} />
+                                        {comment.blocking ? (
+                                          <Chip size="small" label="Blocking" color="warning" />
+                                        ) : null}
+                                        <Typography variant="caption" color="text.secondary">
+                                          {comment.author} · {comment.createdAt}
+                                        </Typography>
+                                      </Stack>
+                                      <Typography variant="body2">{comment.text}</Typography>
+                                      {comment.blocking && !comment.acknowledged ? (
+                                        <Button
+                                          size="small"
+                                          variant="text"
+                                          onClick={() =>
+                                            onAcknowledgeComment(profile.id, comment.id)
+                                          }
+                                        >
+                                          Acknowledge blocking concern
+                                        </Button>
+                                      ) : null}
+                                    </Stack>
+                                  </Paper>
+                                ))
+                              )}
+                              <Stack spacing={1}>
+                                <FormControl size="small">
+                                  <InputLabel id={`comment-tag-${profile.id}`}>Tag</InputLabel>
+                                  <Select
+                                    labelId={`comment-tag-${profile.id}`}
+                                    label="Tag"
+                                    value={commentDraft.tag}
+                                    onChange={(event) =>
+                                      setCommentDrafts((prev) => ({
+                                        ...prev,
+                                        [profile.id]: {
+                                          ...commentDraft,
+                                          tag: event.target.value,
+                                        },
+                                      }))
+                                    }
+                                  >
+                                    {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
+                                      <MenuItem key={tag} value={tag}>
+                                        {tag}
+                                      </MenuItem>
+                                    ))}
+                                  </Select>
+                                </FormControl>
+                                <TextField
+                                  size="small"
+                                  placeholder="Add a comment"
+                                  value={commentDraft.text}
+                                  onChange={(event) =>
+                                    setCommentDrafts((prev) => ({
+                                      ...prev,
+                                      [profile.id]: {
+                                        ...commentDraft,
+                                        text: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                  multiline
+                                  minRows={2}
+                                />
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <Checkbox
+                                    size="small"
+                                    checked={commentDraft.blocking}
+                                    onChange={(event) =>
+                                      setCommentDrafts((prev) => ({
+                                        ...prev,
+                                        [profile.id]: {
+                                          ...commentDraft,
+                                          blocking: event.target.checked,
+                                        },
+                                      }))
+                                    }
+                                  />
+                                  <Typography variant="caption">
+                                    Mark as blocking concern
+                                  </Typography>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => handleSubmitComment(profile.id)}
+                                    disabled={!commentDraft.text.trim()}
+                                  >
+                                    Submit comment
+                                  </Button>
+                                </Stack>
+                              </Stack>
+                            </Stack>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => onStartReview(profile.id)}
+                                disabled={reviewItem.status !== "Draft"}
+                              >
+                                Start Review
+                              </Button>
+                              <Tooltip
+                                title={
+                                  hasBlocking
+                                    ? "Acknowledge blocking concerns before marking reviewed."
+                                    : ""
+                                }
+                              >
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => onMarkReviewed(profile.id)}
+                                    disabled={reviewItem.status !== "Under Review" || hasBlocking}
+                                  >
+                                    Mark Reviewed
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => {
+                                  setShareTarget(profile);
+                                  setShareDialogOpen(true);
+                                }}
+                              >
+                                Share for review
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="text"
+                                onClick={() => handleDuplicateProfile(profile.id)}
+                              >
+                                Duplicate for edits
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => handleRemoveFromReview(profile.id)}
+                              >
+                                Remove
+                              </Button>
+                            </Stack>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  {selectedIds.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7}>
+                        <Typography variant="body2" color="text.secondary">
+                          Select site profiles in the workspace to stage them for review.
+                        </Typography>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </Stack>
+          </Paper>
+        )}
       </Stack>
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={handleMenuClose}>
@@ -748,6 +1090,30 @@ const SiteProfilePage = () => {
           >
             Find with Deep Agent
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Share for review</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Stakeholders can view this site profile snapshot and add comments, but
+            they cannot edit or change its status.
+          </Typography>
+          <TextField
+            label="Shareable link"
+            value={shareLink}
+            fullWidth
+            InputProps={{ readOnly: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>

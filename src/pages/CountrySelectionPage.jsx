@@ -1,8 +1,13 @@
 import {
   Box,
+  Button,
   Chip,
   Checkbox,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControl,
   IconButton,
   InputLabel,
@@ -11,6 +16,8 @@ import {
   Popover,
   Select,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -93,9 +100,17 @@ const initialCountries = [
 const formatTimestamp = () =>
   new Date().toISOString().slice(0, 16).replace("T", " ");
 
-const CountrySelectionPage = () => {
+const CountrySelectionPage = ({
+  reviewedPatientProfiles = [],
+  reviewItems = {},
+  onStartReview = () => {},
+  onMarkReviewed = () => {},
+  onAddComment = () => {},
+  onAcknowledgeComment = () => {},
+}) => {
   const [countries, setCountries] = useState(initialCountries);
   const [searchValue, setSearchValue] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
   const [filters, setFilters] = useState({
     region: [],
     totalSites: { min: "", max: "" },
@@ -103,6 +118,22 @@ const CountrySelectionPage = () => {
   });
   const [sortConfig, setSortConfig] = useState({ key: "", direction: "asc" });
   const [filterAnchor, setFilterAnchor] = useState({ column: "", anchorEl: null });
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+
+  const formatTimestamp = () =>
+    new Date().toISOString().slice(0, 16).replace("T", " ");
+
+  const getReviewItem = (countryId) =>
+    reviewItems[countryId] || {
+      status: "Draft",
+      comments: [],
+      history: [],
+      participants: [],
+      reviewStartAt: "",
+      reviewEndAt: "",
+    };
 
   const filteredCountries = useMemo(() => {
     const normalized = searchValue.trim().toLowerCase();
@@ -241,9 +272,64 @@ const CountrySelectionPage = () => {
     setSearchValue("");
   };
 
+  const handleRemoveFromReview = (countryId) => {
+    setCountries((prev) =>
+      prev.map((country) =>
+        country.id === countryId
+          ? {
+              ...country,
+              selected: false,
+              lastChangedAt: formatTimestamp(),
+              lastChangedBy: "Current User",
+            }
+          : country
+      )
+    );
+  };
+
+  const handleSubmitComment = (countryId) => {
+    const draft = commentDrafts[countryId];
+    if (!draft?.text?.trim()) {
+      return;
+    }
+    onAddComment(countryId, {
+      id: `comment-${Math.random().toString(36).slice(2, 8)}`,
+      author: "You",
+      text: draft.text.trim(),
+      tag: draft.tag || "FYI",
+      blocking: Boolean(draft.blocking),
+      acknowledged: false,
+      createdAt: formatTimestamp(),
+    });
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [countryId]: { text: "", tag: "FYI", blocking: false },
+    }));
+  };
+
+  const shareLink = useMemo(() => {
+    if (typeof window === "undefined" || !shareTarget) {
+      return "";
+    }
+    return `${window.location.origin}${window.location.pathname}?review=${shareTarget.id}`;
+  }, [shareTarget]);
+
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
+        {reviewedPatientProfiles.length === 0 ? (
+          <Paper sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}>
+            <Stack spacing={1}>
+              <Typography variant="subtitle1">
+                Patient profile reviews are still pending
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                You can curate countries in parallel, but only reviewed patient
+                profiles should drive downstream site recommendations.
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
         <Collapse in={selectedCountries.length > 0} unmountOnExit>
           <Paper sx={{ p: 2 }}>
             <Stack spacing={1.5}>
@@ -325,73 +411,322 @@ const CountrySelectionPage = () => {
           </Typography>
         </Toolbar>
 
-        <Paper sx={{ p: 2 }}>
-          {/* Selection workspace only; no rankings or automated recommendations. */}
-          <TableContainer>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox">Add / Remove</TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortConfig.key === "name"}
-                      direction={sortConfig.key === "name" ? sortConfig.direction : "asc"}
-                      onClick={() => handleSortRequest("name")}
-                    >
-                      Country Name
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>Region</TableCell>
-                  <TableCell>
-                    <TableSortLabel
-                      active={sortConfig.key === "totalSites"}
-                      direction={sortConfig.key === "totalSites" ? sortConfig.direction : "asc"}
-                      onClick={() => handleSortRequest("totalSites")}
-                    >
-                      Total Sites
-                    </TableSortLabel>
-                  </TableCell>
-                  <TableCell>Ethnicity %'s</TableCell>
-                  <TableCell>Actions</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sortedCountries.map((country) => (
-                  <TableRow key={country.id} hover>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        checked={country.selected}
-                        onChange={() => handleToggleCountry(country.id)}
-                      />
-                    </TableCell>
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => setActiveTab(value)}
+        >
+          <Tab label="Workspace" />
+          <Tab label="Stakeholder Review" />
+        </Tabs>
+
+        {activeTab === 0 ? (
+          <Paper sx={{ p: 2 }}>
+            {/* Selection workspace only; no rankings or automated recommendations. */}
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox">Add / Remove</TableCell>
                     <TableCell>
-                      <Stack spacing={0.5}>
-                        <Typography variant="subtitle2">{country.name}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Last updated {country.lastChangedAt} by {country.lastChangedBy}
-                        </Typography>
-                      </Stack>
+                      <TableSortLabel
+                        active={sortConfig.key === "name"}
+                        direction={sortConfig.key === "name" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSortRequest("name")}
+                      >
+                        Country Name
+                      </TableSortLabel>
                     </TableCell>
-                    <TableCell>{country.region}</TableCell>
-                    <TableCell>{country.totalSites}</TableCell>
+                    <TableCell>Region</TableCell>
                     <TableCell>
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
-                        {country.ethnicities.map((ethnicity) => (
-                          <Chip key={ethnicity} label={ethnicity} size="small" />
-                        ))}
-                      </Stack>
+                      <TableSortLabel
+                        active={sortConfig.key === "totalSites"}
+                        direction={sortConfig.key === "totalSites" ? sortConfig.direction : "asc"}
+                        onClick={() => handleSortRequest("totalSites")}
+                      >
+                        Total Sites
+                      </TableSortLabel>
                     </TableCell>
-                    <TableCell>
-                      <Tooltip title={`Data source: ${country.dataSource}`}>
-                        <InfoOutlined fontSize="small" color="action" />
-                      </Tooltip>
-                    </TableCell>
+                    <TableCell>Ethnicity %'s</TableCell>
+                    <TableCell>Actions</TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
+                </TableHead>
+                <TableBody>
+                  {sortedCountries.map((country) => {
+                    const reviewItem = getReviewItem(country.id);
+                    return (
+                      <TableRow key={country.id} hover>
+                        <TableCell padding="checkbox">
+                          <Tooltip title="Add to review">
+                            <span>
+                              <Checkbox
+                                checked={country.selected}
+                                onChange={() => handleToggleCountry(country.id)}
+                              />
+                            </span>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell>
+                          <Stack spacing={0.5}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <Typography variant="subtitle2">{country.name}</Typography>
+                              <Chip
+                                size="small"
+                                label={reviewItem.status || "Draft"}
+                                variant="outlined"
+                              />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              Last updated {country.lastChangedAt} by {country.lastChangedBy}
+                            </Typography>
+                          </Stack>
+                        </TableCell>
+                        <TableCell>{country.region}</TableCell>
+                        <TableCell>{country.totalSites}</TableCell>
+                        <TableCell>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            {country.ethnicities.map((ethnicity) => (
+                              <Chip key={ethnicity} label={ethnicity} size="small" />
+                            ))}
+                          </Stack>
+                        </TableCell>
+                        <TableCell>
+                          <Tooltip title={`Data source: ${country.dataSource}`}>
+                            <InfoOutlined fontSize="small" color="action" />
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        ) : (
+          <Paper sx={{ p: 2 }}>
+            {/* Governance intent: review is comment-driven and traceable. */}
+            <Stack spacing={2}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Box>
+                  <Typography variant="subtitle1">Stakeholder Review</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Capture feedback on the country set before it feeds site recommendations.
+                  </Typography>
+                </Box>
+              </Stack>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Country</TableCell>
+                    <TableCell>Review Status</TableCell>
+                    <TableCell>Total Sites</TableCell>
+                    <TableCell>Comment Count</TableCell>
+                    <TableCell>Comments</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {selectedCountries.map((country) => {
+                    const reviewItem = getReviewItem(country.id);
+                    const comments = reviewItem.comments || [];
+                    const hasBlocking = comments.some(
+                      (comment) => comment.blocking && !comment.acknowledged
+                    );
+                    const commentDraft = commentDrafts[country.id] || {
+                      text: "",
+                      tag: "FYI",
+                      blocking: false,
+                    };
+                    return (
+                      <TableRow key={country.id} hover>
+                        <TableCell>
+                          <Typography variant="subtitle2">{country.name}</Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {country.region}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={reviewItem.status} variant="outlined" />
+                        </TableCell>
+                        <TableCell>{country.totalSites}</TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={`${comments.length} comments`}
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell sx={{ minWidth: 260 }}>
+                          <Stack spacing={1}>
+                            {comments.length === 0 ? (
+                              <Typography variant="caption" color="text.secondary">
+                                No comments yet.
+                              </Typography>
+                            ) : (
+                              comments.map((comment) => (
+                                <Paper
+                                  key={comment.id}
+                                  variant="outlined"
+                                  sx={{ p: 1, backgroundColor: "background.default" }}
+                                >
+                                  <Stack spacing={0.5}>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                      <Chip size="small" label={comment.tag || "FYI"} />
+                                      {comment.blocking ? (
+                                        <Chip size="small" label="Blocking" color="warning" />
+                                      ) : null}
+                                      <Typography variant="caption" color="text.secondary">
+                                        {comment.author} · {comment.createdAt}
+                                      </Typography>
+                                    </Stack>
+                                    <Typography variant="body2">{comment.text}</Typography>
+                                    {comment.blocking && !comment.acknowledged ? (
+                                      <Button
+                                        size="small"
+                                        variant="text"
+                                        onClick={() =>
+                                          onAcknowledgeComment(country.id, comment.id)
+                                        }
+                                      >
+                                        Acknowledge blocking concern
+                                      </Button>
+                                    ) : null}
+                                  </Stack>
+                                </Paper>
+                              ))
+                            )}
+                            <Stack spacing={1}>
+                              <FormControl size="small">
+                                <InputLabel id={`comment-tag-${country.id}`}>Tag</InputLabel>
+                                <Select
+                                  labelId={`comment-tag-${country.id}`}
+                                  label="Tag"
+                                  value={commentDraft.tag}
+                                  onChange={(event) =>
+                                    setCommentDrafts((prev) => ({
+                                      ...prev,
+                                      [country.id]: {
+                                        ...commentDraft,
+                                        tag: event.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  {["Concern", "Suggestion", "Question", "FYI"].map((tag) => (
+                                    <MenuItem key={tag} value={tag}>
+                                      {tag}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                              <TextField
+                                size="small"
+                                placeholder="Add a comment"
+                                value={commentDraft.text}
+                                onChange={(event) =>
+                                  setCommentDrafts((prev) => ({
+                                    ...prev,
+                                    [country.id]: {
+                                      ...commentDraft,
+                                      text: event.target.value,
+                                    },
+                                  }))
+                                }
+                                multiline
+                                minRows={2}
+                              />
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Checkbox
+                                  size="small"
+                                  checked={commentDraft.blocking}
+                                  onChange={(event) =>
+                                    setCommentDrafts((prev) => ({
+                                      ...prev,
+                                      [country.id]: {
+                                        ...commentDraft,
+                                        blocking: event.target.checked,
+                                      },
+                                    }))
+                                  }
+                                />
+                                <Typography variant="caption">
+                                  Mark as blocking concern
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleSubmitComment(country.id)}
+                                  disabled={!commentDraft.text.trim()}
+                                >
+                                  Submit comment
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={1} justifyContent="flex-end">
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => onStartReview(country.id)}
+                              disabled={reviewItem.status !== "Draft"}
+                            >
+                              Start Review
+                            </Button>
+                            <Tooltip
+                              title={
+                                hasBlocking
+                                  ? "Acknowledge blocking concerns before marking reviewed."
+                                  : ""
+                              }
+                            >
+                              <span>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  onClick={() => onMarkReviewed(country.id)}
+                                  disabled={reviewItem.status !== "Under Review" || hasBlocking}
+                                >
+                                  Mark Reviewed
+                                </Button>
+                              </span>
+                            </Tooltip>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() => {
+                                setShareTarget(country);
+                                setShareDialogOpen(true);
+                              }}
+                            >
+                              Share for review
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleRemoveFromReview(country.id)}
+                            >
+                              Remove
+                            </Button>
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {selectedCountries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          Select countries in the workspace to stage them for review.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </Stack>
+          </Paper>
+        )}
 
         <Paper sx={{ p: 2 }}>
           {/* Summary stays informational to avoid decision logic. */}
@@ -474,6 +809,30 @@ const CountrySelectionPage = () => {
           ) : null}
         </Box>
       </Popover>
+
+      <Dialog
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Share for review</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Stakeholders can view this country snapshot and add comments, but they
+            cannot edit or change its status.
+          </Typography>
+          <TextField
+            label="Shareable link"
+            value={shareLink}
+            fullWidth
+            InputProps={{ readOnly: true }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShareDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
