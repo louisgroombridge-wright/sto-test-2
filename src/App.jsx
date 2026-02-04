@@ -269,6 +269,12 @@ const App = () => {
             }
           />
           <Route
+            path="/site-recommendation/shared"
+            element={
+              <SiteRecommendationPage sharedView />
+            }
+          />
+          <Route
             path="/review-approval"
             element={
               <PlaceholderPage
