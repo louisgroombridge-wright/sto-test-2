@@ -495,25 +495,22 @@ const SiteProfilePage = ({
     </FormControl>
   );
 
-  if (approvedPatientProfiles.length === 0) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Paper sx={{ p: 3, border: "1px solid", borderColor: "warning.main" }}>
-          <Stack spacing={1}>
-            <Typography variant="h6">Patient profile approval required</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Approve at least one patient profile before building site profiles.
-              Downstream criteria should only reference approved patient assumptions.
-            </Typography>
-          </Stack>
-        </Paper>
-      </Box>
-    );
-  }
-
   return (
     <Box sx={{ p: 4 }}>
       <Stack spacing={3}>
+        {approvedPatientProfiles.length === 0 ? (
+          <Paper sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}>
+            <Stack spacing={1}>
+              <Typography variant="subtitle1">
+                Patient profile approvals are still pending
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                You can draft site profiles in parallel, but only approved patient
+                profiles should drive downstream recommendations.
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
         <Stack
           direction={{ xs: "column", md: "row" }}
           spacing={2}
