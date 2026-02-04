@@ -34,9 +34,12 @@ import {
 } from "@mui/material";
 import {
   Add,
+  ArrowDownward,
+  ArrowUpward,
   Close,
   DeleteOutline,
   MoreVert,
+  Remove,
   UploadFile,
 } from "@mui/icons-material";
 import { Fragment, useMemo, useRef, useState } from "react";
@@ -612,11 +615,11 @@ const PatientProfilePage = () => {
                                   <TableCell>
                                     {/* Impacts are directional only; icons avoid implying precision or ranking. */}
                                     {row.direction === "up" ? (
-                                      <Icon fontSize="small">arrow_upward</Icon>
+                                      <Icon fontSize="small" component={ArrowUpward} />
                                     ) : row.direction === "down" ? (
-                                      <Icon fontSize="small">arrow_downward</Icon>
+                                      <Icon fontSize="small" component={ArrowDownward} />
                                     ) : (
-                                      <Icon fontSize="small">remove</Icon>
+                                      <Icon fontSize="small" component={Remove} />
                                     )}
                                   </TableCell>
                                 </TableRow>
