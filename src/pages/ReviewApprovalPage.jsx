@@ -71,7 +71,7 @@ const ReviewApprovalPage = ({
       onRecordShortlistAction({
         action: "Note Updated",
         site,
-        source: "Review & Approval",
+        source: "Stakeholder Review",
       });
     }
     setNoteDialogOpen(false);
@@ -82,7 +82,7 @@ const ReviewApprovalPage = ({
     onRecordShortlistAction({
       action: "Removed",
       site,
-      source: "Review & Approval",
+      source: "Stakeholder Review",
     });
   };
 
@@ -117,7 +117,7 @@ const ReviewApprovalPage = ({
     onRecordShortlistAction({
       action: "Added",
       site: newSite,
-      source: "Review & Approval",
+      source: "Stakeholder Review",
     });
     setAddDraft({ siteName: "", country: "", city: "" });
     setAddDialogOpen(false);
@@ -127,7 +127,7 @@ const ReviewApprovalPage = ({
     <Box sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
       <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)", p: 3 }}>
         <Stack spacing={1}>
-          <Typography variant="h5">Review & Approval</Typography>
+          <Typography variant="h5">Stakeholder Review</Typography>
           <Typography variant="body2" color="text.secondary">
             Review the scenario shortlist and finalize decisions before sharing externally.
           </Typography>
@@ -142,7 +142,7 @@ const ReviewApprovalPage = ({
           <Button variant="outlined" onClick={() => setAddDialogOpen(true)}>
             Add site
           </Button>
-          {/* Review & Approval is the single source of truth for the shortlist. */}
+          {/* Stakeholder Review is the single source of truth for the shortlist. */}
           <Typography variant="body2" color="text.secondary">
             Shortlisted sites are reviewed here, not inside the discovery workflow.
           </Typography>

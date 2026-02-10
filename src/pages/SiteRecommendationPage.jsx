@@ -151,6 +151,9 @@ const SiteRecommendationPage = ({
   onAddToShortlist,
   onRemoveFromShortlist,
   onRecordShortlistAction = () => {},
+  reviewedPatientProfiles = [],
+  reviewedSiteProfiles = [],
+  reviewedCountries = [],
 }) => {
   const [sites, setSites] = useState(initialSites);
   const [selectedSites, setSelectedSites] = useState({});
@@ -185,6 +188,16 @@ const SiteRecommendationPage = ({
     action: "",
     responseNote: "",
   });
+
+  const missingReviews = [
+    reviewedPatientProfiles.length === 0
+      ? "Patient profiles are not yet reviewed."
+      : null,
+    reviewedSiteProfiles.length === 0
+      ? "Site profiles are not yet reviewed."
+      : null,
+    reviewedCountries.length === 0 ? "Countries are not yet reviewed." : null,
+  ].filter(Boolean);
 
   const handleSelectSite = (siteId, checked) => {
     setSelectedSites((prev) => ({
@@ -975,6 +988,29 @@ const SiteRecommendationPage = ({
 
   return (
     <Box sx={{ p: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+      {missingReviews.length > 0 ? (
+        <Paper
+          elevation={0}
+          sx={{ p: 2, border: "1px solid", borderColor: "warning.main" }}
+        >
+          <Stack spacing={1}>
+            <Typography variant="subtitle1">
+              This step is using an unreviewed configuration
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              You can review recommendations in parallel, but downstream actions
+              should rely on reviewed scenario inputs.
+            </Typography>
+            <Stack spacing={0.5}>
+              {missingReviews.map((message) => (
+                <Typography key={message} variant="body2">
+                  • {message}
+                </Typography>
+              ))}
+            </Stack>
+          </Stack>
+        </Paper>
+      ) : null}
       <Paper elevation={0} sx={{ border: "1px solid rgba(0, 0, 0, 0.12)" }}>
         <Toolbar sx={{ gap: 2, flexWrap: "wrap" }}>
           <TextField
@@ -985,7 +1021,7 @@ const SiteRecommendationPage = ({
             size="small"
             sx={{ minWidth: 260 }}
           />
-          {/* Discovery stays in this tab; review happens in the dedicated Review & Approval page. */}
+          {/* Discovery stays in this tab; review happens in the dedicated Stakeholder Review page. */}
         </Toolbar>
       </Paper>
 

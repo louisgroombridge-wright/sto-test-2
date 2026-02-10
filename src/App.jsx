@@ -104,6 +104,12 @@ const formatTimestamp = () =>
     minute: "2-digit",
   }).format(new Date());
 
+const createScenarioReviewState = () => ({
+  patientProfiles: { items: {} },
+  siteProfiles: { items: {} },
+  countries: { items: {} },
+});
+
 const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => {
   const { scenarioId } = useParams();
   const navigate = useNavigate();
@@ -114,6 +120,7 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   const [disabledNotice, setDisabledNotice] = useState("");
   const [shortlistsByScenario, setShortlistsByScenario] = useState({});
   const [shortlistAuditByScenario, setShortlistAuditByScenario] = useState({});
+  const [reviewsByScenario, setReviewsByScenario] = useState({});
 
   const activeScenario = useMemo(
     () => scenarios.find((scenario) => scenario.id === scenarioId),
@@ -142,6 +149,111 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
   const basePath = scenarioBasePath(activeScenario.id);
   const shortlist = shortlistsByScenario[activeScenario.id] ?? [];
   const shortlistAudit = shortlistAuditByScenario[activeScenario.id] ?? [];
+  const scenarioReviewState =
+    reviewsByScenario[activeScenario.id] ?? createScenarioReviewState();
+
+  const getReviewedIds = (sectionKey) =>
+    Object.entries(scenarioReviewState[sectionKey].items || {})
+      .filter(([, value]) => value.status === "Reviewed")
+      .map(([key]) => key);
+
+  const reviewedPatientProfiles = getReviewedIds("patientProfiles");
+  const reviewedSiteProfiles = getReviewedIds("siteProfiles");
+  const reviewedCountries = getReviewedIds("countries");
+
+  const updateScenarioReviewState = (sectionKey, updater) => {
+    setReviewsByScenario((prev) => {
+      const current = prev[activeScenario.id] ?? createScenarioReviewState();
+      return {
+        ...prev,
+        [activeScenario.id]: {
+          ...current,
+          [sectionKey]: updater(current[sectionKey]),
+        },
+      };
+    });
+  };
+
+  const ensureReviewItem = (section, entityId) =>
+    section.items?.[entityId] || {
+      status: "Draft",
+      comments: [],
+      history: [],
+      participants: [],
+      reviewStartAt: "",
+      reviewEndAt: "",
+    };
+
+  const handleStartReview = (sectionKey, entityId) => {
+    updateScenarioReviewState(sectionKey, (section) => {
+      const item = ensureReviewItem(section, entityId);
+      const nextItem = {
+        ...item,
+        status: "Under Review",
+        reviewStartAt: item.reviewStartAt || formatTimestamp(),
+        history: [
+          ...(item.history || []),
+          { action: "Start Review", by: "You", at: formatTimestamp() },
+        ],
+      };
+      return {
+        ...section,
+        items: { ...(section.items || {}), [entityId]: nextItem },
+      };
+    });
+  };
+
+  const handleMarkReviewed = (sectionKey, entityId) => {
+    updateScenarioReviewState(sectionKey, (section) => {
+      const item = ensureReviewItem(section, entityId);
+      const nextItem = {
+        ...item,
+        status: "Reviewed",
+        reviewEndAt: formatTimestamp(),
+        history: [
+          ...(item.history || []),
+          { action: "Mark Reviewed", by: "You", at: formatTimestamp() },
+        ],
+      };
+      return {
+        ...section,
+        items: { ...(section.items || {}), [entityId]: nextItem },
+      };
+    });
+  };
+
+  const handleAddReviewComment = (sectionKey, entityId, comment) => {
+    updateScenarioReviewState(sectionKey, (section) => {
+      const item = ensureReviewItem(section, entityId);
+      const nextItem = {
+        ...item,
+        comments: [...(item.comments || []), comment],
+        participants: Array.from(
+          new Set([...(item.participants || []), comment.author])
+        ),
+      };
+      return {
+        ...section,
+        items: { ...(section.items || {}), [entityId]: nextItem },
+      };
+    });
+  };
+
+  const handleAcknowledgeComment = (sectionKey, entityId, commentId) => {
+    updateScenarioReviewState(sectionKey, (section) => {
+      const item = ensureReviewItem(section, entityId);
+      const nextItem = {
+        ...item,
+        comments: (item.comments || []).map((entry) =>
+          entry.id === commentId ? { ...entry, acknowledged: true } : entry
+        ),
+      };
+      return {
+        ...section,
+        items: { ...(section.items || {}), [entityId]: nextItem },
+      };
+    });
+  };
 
   const handleAddToShortlist = (site) => {
     setShortlistsByScenario((prev) => {
@@ -231,11 +343,11 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         label: "Site Recommendation",
         path: `${basePath}/site-recommendation`,
         status: steps.siteRecommendation,
-        enabled: artifacts.countriesApproved,
-        disabledReason: "Approve countries before recommending sites.",
+        enabled: true,
+        disabledReason: "",
       },
       {
-        label: "Review & Approval",
+        label: "Stakeholder Review",
         path: `${basePath}/review-approval`,
         status: steps.reviewApproval,
         enabled: artifacts.siteRecommendationsReady,
@@ -252,7 +364,7 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         status: "Read-only",
         icon: <Visibility fontSize="small" />,
         enabled: activeScenario.artifacts.reviewStarted,
-        disabledReason: "Begin Review & Approval to unlock outputs.",
+        disabledReason: "Begin Stakeholder Review to unlock outputs.",
       },
       {
         label: "Export & Audit",
@@ -260,7 +372,7 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         status: "Read-only",
         icon: <Description fontSize="small" />,
         enabled: activeScenario.artifacts.reviewStarted,
-        disabledReason: "Begin Review & Approval to unlock outputs.",
+        disabledReason: "Begin Stakeholder Review to unlock outputs.",
       },
     ];
   }, [activeScenario, basePath]);
@@ -375,9 +487,47 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
         <Box sx={{ flexGrow: 1 }}>
           <Routes>
             <Route index element={<Navigate to={defaultScenarioPath} replace />} />
-            <Route path="patient-profile" element={<PatientProfilePage />} />
-            <Route path="site-profile" element={<SiteProfilePage />} />
-            <Route path="country-selection" element={<CountrySelectionPage />} />
+            <Route
+              path="patient-profile"
+              element={
+                <PatientProfilePage
+                  reviewItems={scenarioReviewState.patientProfiles.items}
+                  onStartReview={(entityId) => handleStartReview("patientProfiles", entityId)}
+                  onMarkReviewed={(entityId) => handleMarkReviewed("patientProfiles", entityId)}
+                  onAcknowledgeComment={(entityId, commentId) =>
+                    handleAcknowledgeComment("patientProfiles", entityId, commentId)
+                  }
+                />
+              }
+            />
+            <Route
+              path="site-profile"
+              element={
+                <SiteProfilePage
+                  reviewedPatientProfiles={reviewedPatientProfiles}
+                  reviewItems={scenarioReviewState.siteProfiles.items}
+                  onStartReview={(entityId) => handleStartReview("siteProfiles", entityId)}
+                  onMarkReviewed={(entityId) => handleMarkReviewed("siteProfiles", entityId)}
+                  onAcknowledgeComment={(entityId, commentId) =>
+                    handleAcknowledgeComment("siteProfiles", entityId, commentId)
+                  }
+                />
+              }
+            />
+            <Route
+              path="country-selection"
+              element={
+                <CountrySelectionPage
+                  reviewedPatientProfiles={reviewedPatientProfiles}
+                  reviewItems={scenarioReviewState.countries.items}
+                  onStartReview={(entityId) => handleStartReview("countries", entityId)}
+                  onMarkReviewed={(entityId) => handleMarkReviewed("countries", entityId)}
+                  onAcknowledgeComment={(entityId, commentId) =>
+                    handleAcknowledgeComment("countries", entityId, commentId)
+                  }
+                />
+              }
+            />
             <Route
               path="site-recommendation"
               element={
@@ -386,6 +536,9 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   onAddToShortlist={handleAddToShortlist}
                   onRemoveFromShortlist={handleRemoveFromShortlist}
                   onRecordShortlistAction={handleRecordShortlistAction}
+                  reviewedPatientProfiles={reviewedPatientProfiles}
+                  reviewedSiteProfiles={reviewedSiteProfiles}
+                  reviewedCountries={reviewedCountries}
                 />
               }
             />
@@ -398,6 +551,9 @@ const ScenarioWorkspace = ({ scenarios, scenarioRoutes, setScenarioRoutes }) => 
                   onAddToShortlist={handleAddToShortlist}
                   onRemoveFromShortlist={handleRemoveFromShortlist}
                   onRecordShortlistAction={handleRecordShortlistAction}
+                  reviewedPatientProfiles={reviewedPatientProfiles}
+                  reviewedSiteProfiles={reviewedSiteProfiles}
+                  reviewedCountries={reviewedCountries}
                 />
               }
             />
